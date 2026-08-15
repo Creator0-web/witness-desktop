@@ -1,0 +1,81 @@
+# WITNESS Windows distribution / updating
+
+## Target user experience
+
+A user downloads **WITNESS-Setup.exe once**, installs it, and launches WITNESS
+from the Start menu/desktop. WITNESS checks for a newer stable release shortly
+after startup and every six hours while open. When a release exists, a compact
+**UPDATE vX.Y.Z** button appears in the top bar. **Update & Restart** downloads
+the release installer, verifies its published SHA-256 hash, exits WITNESS,
+updates only the installed program files, and reopens WITNESS.
+
+Personal history is outside the install directory under the local profile owned
+by `profile_runtime.py`, so installer replacement must never include/delete
+`%LOCALAPPDATA%\WITNESS`.
+
+## Distribution pieces
+
+- `packaging/witness.spec` — Windows PyInstaller **onedir** build.
+- `packaging/WITNESS.iss` — per-user Inno Setup installer targeting
+  `%LOCALAPPDATA%\Programs\WITNESS` with no administrator requirement.
+- `release_channel.json` — update-channel metadata. Source builds deliberately
+  have a blank repository and therefore do no network update checks.
+- `update_manager.py` — checks GitHub Releases, downloads the fixed installer
+  asset, validates `WITNESS-Setup.exe.sha256`, then schedules the installer.
+- `ui_qt/update_service.py` — moves network/download work off Qt's GUI thread.
+- `.github/workflows/release-windows.yml` — on a version tag, uses a Windows
+  runner to build/test/package and publish the installer to GitHub Releases.
+
+## One-time release-host setup
+
+The updater needs a publicly readable release endpoint. The provided workflow
+uses the repository's own GitHub Releases. For a consumer/no-login build, that
+release repository must be public. If the source should remain private, use a
+separate public binaries/release repository or another HTTPS host and adapt the
+release workflow/update channel; do not embed personal GitHub credentials into
+WITNESS.
+
+For the provided same-repository flow:
+
+1. Put the clean WITNESS source in a GitHub repository.
+2. Commit the project, including `.github/workflows/release-windows.yml`.
+3. Ensure `app_version.VERSION` matches the release you are about to publish.
+4. Create/push tag `v7.52.0` (or the corresponding future version).
+5. GitHub Actions builds on Windows and creates a Release containing exactly:
+   `WITNESS-Setup.exe` and `WITNESS-Setup.exe.sha256`.
+6. Give new users the Setup EXE from the latest published release.
+
+The CI step runs `packaging/prepare_release.py`, which embeds the repository
+slug in the packaged copy of `release_channel.json`. Development ZIPs keep the
+repository blank so they cannot accidentally self-update.
+
+## Every future WITNESS release
+
+1. Change `app_version.VERSION` / display build tag.
+2. Test source normally.
+3. Commit.
+4. Tag that exact commit `v<app_version.VERSION>` and push the tag.
+5. CI produces and publishes the installer. Existing installed users discover
+   it automatically; no ZIP replacement is required on their computers.
+
+## Local Windows build (optional)
+
+If a Windows machine needs to build an installer without GitHub Actions, first
+put the desired repository slug in `release_channel.json`, install Inno Setup 6,
+and run:
+
+`powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1`
+
+The installer and SHA-256 file land in `release\`.
+
+## Important release hardening still pending
+
+- **Code signing:** the first internal builds are unsigned. Windows may warn
+  about an unknown publisher. Before broad distribution, sign both the app and
+  installer with a trusted Windows code-signing certificate (or move to a
+  signed MSIX/Microsoft Store path).
+- **Secrets:** API keys are profile-isolated but still plain text today. Move
+  them to Windows-protected storage before broad distribution.
+- **Full Qt runtime:** the packaged Qt app still has the v7.51 architectural
+  limitation: it does not yet start the complete Layer-1 tracker/voice/
+  intervention runtime. Packaging does not change that behavior.

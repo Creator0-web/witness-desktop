@@ -1,0 +1,70 @@
+name: Release Windows Desktop
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: packaging/requirements-desktop.txt
+
+      - name: Embed update channel and validate tag
+        shell: pwsh
+        run: python packaging/prepare_release.py --repository "${{ github.repository }}" --tag "${{ github.ref_name }}"
+
+      - name: Install Python build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r packaging/requirements-desktop.txt
+
+      - name: Build WITNESS with PyInstaller
+        shell: pwsh
+        run: python -m PyInstaller --noconfirm --clean packaging/witness.spec
+
+      - name: Smoke-test frozen executable
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:WITNESS_DATA_DIR = Join-Path $env:RUNNER_TEMP "witness-smoke"
+          & .\dist\WITNESS\WITNESS.exe --smoke-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build per-user installer and hash
+        shell: pwsh
+        run: |
+          $version = python -c "from app_version import VERSION; print(VERSION)"
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          & $iscc "/DMyAppVersion=$version" packaging\WITNESS.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $hash = (Get-FileHash .\release\WITNESS-Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  WITNESS-Setup.exe" | Set-Content -Encoding ascii .\release\WITNESS-Setup.exe.sha256
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            .\release\WITNESS-Setup.exe `
+            .\release\WITNESS-Setup.exe.sha256 `
+            --title "WITNESS ${{ github.ref_name }}" `
+            --generate-notes

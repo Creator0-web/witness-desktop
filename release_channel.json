@@ -1,0 +1,7 @@
+{
+  "channel": "stable",
+  "repository": "",
+  "asset_name": "WITNESS-Setup.exe",
+  "sha256_asset_name": "WITNESS-Setup.exe.sha256",
+  "check_hours": 6
+}
