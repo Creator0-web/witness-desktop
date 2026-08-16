@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import sys
+import time
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QTimer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow,
     QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
@@ -34,6 +35,7 @@ class WitnessMainWindow(QMainWindow):
         self.setStyleSheet(theme.APP_STYLESHEET)
         self._page_anim = None
         self._available_update = None
+        self._last_update_check = 0.0
 
         central = QWidget(); self.setCentralWidget(central)
         outer = QVBoxLayout(central)
@@ -102,16 +104,32 @@ class WitnessMainWindow(QMainWindow):
         self.update_service.progress.connect(self._on_update_progress)
         self.update_service.downloaded.connect(self._on_update_downloaded)
         self.update_service.error.connect(self._on_update_error)
-        QTimer.singleShot(3500, lambda: self.update_service.check(silent=True))
+        QTimer.singleShot(3500, self._check_for_updates)
         self.update_timer = QTimer(self)
-        self.update_timer.timeout.connect(lambda: self.update_service.check(silent=True))
-        self.update_timer.start(update_manager.channel_config()["check_hours"] * 60 * 60 * 1000)
+        self.update_timer.timeout.connect(self._check_for_updates)
+        self.update_timer.start(update_manager.channel_config()["check_minutes"] * 60 * 1000)
 
         # First-run setup is local-only and never interrupts an established account.
         if onboarding.should_show():
             QTimer.singleShot(650, self._show_onboarding)
         if profile_runtime.current_profile().get("previous_unclean_shutdown"):
             QTimer.singleShot(1100, self._show_recovery_notice)
+
+
+    def _check_for_updates(self):
+        """Check quietly while the app is open; never block the Qt thread."""
+        self._last_update_check = time.monotonic()
+        self.update_service.check(silent=True)
+
+    def event(self, event):
+        # During development it is common for a release to be published after
+        # WITNESS was already opened. Re-check when the top-level window is
+        # activated, but throttle focus-driven calls so alt-tab cannot spam
+        # GitHub. Periodic checks remain as the fallback.
+        if event.type() == QEvent.Type.WindowActivate and hasattr(self, "update_service"):
+            if time.monotonic() - getattr(self, "_last_update_check", 0.0) >= 60.0:
+                QTimer.singleShot(250, self._check_for_updates)
+        return super().event(event)
 
     def _show_onboarding(self):
         dlg = onboarding.OnboardingDialog(self)

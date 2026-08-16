@@ -3,5 +3,6 @@
   "repository": "",
   "asset_name": "WITNESS-Setup.exe",
   "sha256_asset_name": "WITNESS-Setup.exe.sha256",
-  "check_hours": 6
+  "check_hours": 6,
+  "check_minutes": 10
 }

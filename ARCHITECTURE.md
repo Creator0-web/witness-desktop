@@ -191,6 +191,17 @@ imports `secrets.json`. `.session_active.json` is removed on clean exit; if it s
 process kill, the next launch reports recovery and writes/checks a backup. `crash_reports/` stores
 uncaught Python tracebacks locally. None of these folders belong in release source.
 
+
+### Interactive 3D control feel (v7.56.1+)
+
+`ui_qt/character_3d.py` remains an experimental procedural renderer, but Windows use confirmed the
+interaction itself is worth continuing. Manual drag is intentionally slow and weighty: cursor deltas
+change target yaw/pitch, the rendered orientation eases toward those targets on the animation timer,
+and both drag axes use the natural object-inspection direction (the v7.56.0 signs were perceived as
+inverted). Do not make rotation highly sensitive again merely to feel more responsive; responsiveness
+here means immediate smooth motion, not large angular travel per pixel. Portrait art remains the
+canonical high-fidelity look until a production rigged model exists.
+
 ### Windows desktop distribution / update contract (v7.52+)
 
 The source tree and the installed product now have an explicit distribution boundary.
@@ -210,8 +221,9 @@ latest stable release, compare numeric versions, require both `WITNESS-Setup.exe
 `WITNESS-Setup.exe.sha256`, download to a temporary update directory, verify SHA-256, then
 schedule the Inno installer after the current app exits. `ui_qt/update_service.py` performs
 network/download work in daemon threads and reports back by Qt signals; update I/O must not
-block the GUI thread or regress the v7.48 responsiveness contract. The shell checks shortly
-after launch and every six hours. It never auto-installs silently without the person's
+block the GUI thread or regress the v7.48 responsiveness contract. The shell checks shortly after launch, every 10 minutes while open, and on a throttled
+window-reactivation check (minimum 60 seconds between activation requests). It never auto-installs
+silently without the person's
 **Update & Restart** action. v7.52.2 is the first deliberate end-to-end updater proof release:
 the updater already relaunches WITNESS with `/updated`, and the Qt shell now uses that argument
 only to show a short green `UPDATED TO vX.Y.Z` confirmation badge. The flag/badge is presentation

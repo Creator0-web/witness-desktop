@@ -53,13 +53,24 @@ def channel_config() -> dict:
     cfg = _read_json(_bundle_root() / "release_channel.json", {})
     if not isinstance(cfg, dict):
         cfg = {}
+    try:
+        check_minutes = int(cfg.get("check_minutes") or 0)
+    except Exception:
+        check_minutes = 0
+    if check_minutes <= 0:
+        try:
+            check_minutes = max(60, int(cfg.get("check_hours") or 6) * 60)
+        except Exception:
+            check_minutes = 360
     return {
         "channel": str(cfg.get("channel") or "stable"),
         "repository": str(cfg.get("repository") or "").strip(),
         "asset_name": str(cfg.get("asset_name") or "WITNESS-Setup.exe"),
         "sha256_asset_name": str(
             cfg.get("sha256_asset_name") or "WITNESS-Setup.exe.sha256"),
-        "check_hours": max(1, int(cfg.get("check_hours") or 6)),
+        "check_minutes": max(1, check_minutes),
+        # Retained for older callers/config files. New Qt builds schedule by minutes.
+        "check_hours": max(1, (max(1, check_minutes) + 59) // 60),
     }
 
 

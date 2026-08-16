@@ -149,6 +149,8 @@ class Character3DView(QWidget):
         self.state = {"charge": {"percent": 0}, "reserve": {"percent": 0}, "shield": {}}
         self.yaw = -0.10
         self.pitch = -0.03
+        self._target_yaw = self.yaw
+        self._target_pitch = self.pitch
         self.zoom = 1.0
         self._drag = None
         self._phase = 0.0
@@ -156,7 +158,7 @@ class Character3DView(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(33)
-        self.setToolTip("3D prototype · drag to rotate · wheel to zoom · double-click to reset")
+        self.setToolTip("3D prototype · drag slowly to inspect · wheel to zoom · double-click to reset")
 
     def set_scene(self, stage: dict, state: dict):
         self.stage = dict(stage or {"index": 1, "name": "Wanderer"})
@@ -167,15 +169,22 @@ class Character3DView(QWidget):
         self.auto_rotate = bool(enabled)
 
     def reset_view(self):
-        self.yaw = -0.10; self.pitch = -0.03; self.zoom = 1.0
+        self.yaw = -0.10; self.pitch = -0.03
+        self._target_yaw = self.yaw; self._target_pitch = self.pitch
+        self.zoom = 1.0
         self.update()
 
     def _tick(self):
         if not self.isVisible():
             return
         self._phase += 0.035
+        # Rotation is deliberately weighty. Drag changes a target orientation;
+        # the rendered body eases toward it rather than snapping to the cursor.
+        # This gives the avatar a slower, more powerful inspection feel.
         if self.auto_rotate and self._drag is None:
-            self.yaw += 0.007
+            self._target_yaw += 0.0032
+        self.yaw += (self._target_yaw - self.yaw) * 0.16
+        self.pitch += (self._target_pitch - self.pitch) * 0.16
         self.update()
 
     def mousePressEvent(self, event):
@@ -187,8 +196,11 @@ class Character3DView(QWidget):
     def mouseMoveEvent(self, event):
         if self._drag is not None:
             pos = event.position(); dx = pos.x() - self._drag.x(); dy = pos.y() - self._drag.y(); self._drag = pos
-            self.yaw += dx * 0.010
-            self.pitch = max(-0.55, min(0.42, self.pitch + dy * 0.007))
+            # Natural object-drag direction: dragging right turns the character
+            # toward the right; dragging up tilts the view upward. The v7.56.0
+            # prototype felt inverted on both axes and too sensitive.
+            self._target_yaw -= dx * 0.0045
+            self._target_pitch = max(-0.55, min(0.42, self._target_pitch - dy * 0.0035))
             self.update()
         super().mouseMoveEvent(event)
 

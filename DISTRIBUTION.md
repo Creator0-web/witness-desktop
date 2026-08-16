@@ -4,7 +4,7 @@
 
 A user downloads **WITNESS-Setup.exe once**, installs it, and launches WITNESS
 from the Start menu/desktop. WITNESS checks for a newer stable release shortly
-after startup and every six hours while open. When a release exists, a compact
+after startup, every 10 minutes while open, and on throttled window re-activation. When a release exists, a compact
 **UPDATE vX.Y.Z** button appears in the top bar. **Update & Restart** downloads
 the release installer, verifies its published SHA-256 hash, exits WITNESS,
 updates only the installed program files, and reopens WITNESS.
@@ -121,3 +121,13 @@ v7.52.2 briefly renders a green `UPDATED TO v7.52.2` badge so success is visuall
 A successful test proves: latest-release discovery, version comparison, background download,
 published SHA-256 verification, silent program-file replacement, restart, and local-profile
 preservation all work together.
+
+
+## v7.56.1 live update discovery
+
+Installed WITNESS no longer requires a restart simply to notice a release published after the app
+was opened. The Qt shell keeps the startup check, polls the stable channel every 10 minutes, and also
+requests a throttled check when the main window becomes active after at least 60 seconds since the
+last request. `UpdateService` still performs the actual network request in a daemon thread, so this
+must not block UI paint/Activity feedback. Discovery only surfaces the update button; installation
+continues to require explicit **Update & Restart** confirmation.

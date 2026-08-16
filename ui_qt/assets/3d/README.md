@@ -16,3 +16,11 @@ outfit variants, ideally exported as GLB/glTF with:
 - environments as separate assets so a Sovereign can revisit the original jungle.
 
 Do not couple 3D state to scoring. `shared/character_engine.py` remains the data contract.
+
+
+## Windows interaction acceptance
+
+v7.56.0 proved that direct 3D inspection feels compelling enough to continue. v7.56.1 tunes the
+prototype to the accepted interaction direction: natural/non-inverted horizontal and vertical drag,
+reduced angular sensitivity, and eased target rotation for a slower/powerful feel. Preserve that
+interaction character when replacing the procedural mesh with a production GLB renderer.

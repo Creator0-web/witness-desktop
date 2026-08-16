@@ -1,5 +1,11 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.56.1 3D Control Feel + Live Update Checks:** Windows testing validated that the interactive
+> 3D concept feels good. Drag direction is now natural on both axes, sensitivity is reduced, and
+> rotation eases toward the cursor target for a slower/heavier inspection feel. Installed builds now
+> re-check releases every 10 minutes and on throttled window re-activation, so a newly published
+> update can appear without restarting WITNESS.
+
 > **v7.56.0 Theme Evolution + Interactive 3D Lab:** the whole Qt shell now matures through
 > three visual eras tied only to the canonical current Level: WILD (1-2), FORGED (3-4), NOIR
 > (5-8). Character keeps the approved portrait art as default and adds an experimental true-geometry
@@ -136,7 +142,7 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.55.2
+### Current Qt state — v7.56.1
 
 The approved responsive Arena/History/Progression/Character structure remains intact. v7.55.2 adds a self-cleaning GitHub Actions release checkout; the v7.55
 keeps the eight-stage ladder and approved composite artwork, but makes the character-state model

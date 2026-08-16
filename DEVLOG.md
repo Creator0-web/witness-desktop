@@ -53,6 +53,33 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-16 -- v7.56.1 3D control feel + live update discovery
+Requested by: person tested v7.56.0 on Windows and said the 3D character interaction "honestly feels nice," but both manual drag axes felt inverted and rotation sensitivity was too high/fast for the powerful feel they want. They also reported that a newly published update only became visible after restarting WITNESS.
+
+Touched:
+- `ui_qt/character_3d.py`: reversed the v7.56.0 horizontal and vertical drag signs exactly from the Windows feedback, reduced yaw/pitch sensitivity to 0.0045 / 0.0035 radians-per-pixel target movement, and changed direct cursor snapping into target orientation + 16% per-frame easing. Auto Rotate is also slower (0.0032 target yaw/frame). The intent is an immediate but weighty, deliberate inspection feel. Reset now resets both rendered and target orientation.
+- `update_manager.py`: update channel config now supports `check_minutes`, with backward-compatible `check_hours` fallback for older channel files.
+- `release_channel.json`: stable installed build cadence set to 10 minutes; source repository remains intentionally blank.
+- `ui_qt/shell.py`: startup update check remains; periodic release checks now use the minute cadence. A top-level `WindowActivate` event also requests a silent throttled check if at least 60 seconds have elapsed since the previous request, so a release published while WITNESS is already open can surface without restarting. Network work remains in `UpdateService`'s background thread and install still requires explicit Update & Restart.
+- `app_version.py`, `qt_main.py`, `QT_BUILD.md`, `README.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `ui_qt/assets/3d/README.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.56.1 / `2026-08-16-g`, recorded that Windows testing positively validated the 3D interaction concept, and preserved the accepted slow-control direction as a production-3D requirement.
+
+Did NOT touch: `core/` in any way; the person did not authorize Layer 1. Also did NOT modify `shared/game_engine.py` or `shared/db.py`; XP, Ghost, records, 8-stage progression, Undo reconciliation, Core/Charge/Shield semantics, themes and profile data remain unchanged.
+
+What changed and why:
+v7.56.0 successfully answered the important product question: direct 3D interaction feels good enough to continue. This patch therefore does not add more procedural character features; it tunes the interaction to the person's real Windows feedback and removes an update-discovery annoyance that came from the old six-hour polling interval. The next major 3D work should be production asset quality (rigged identity-consistent character), not ornamenting the placeholder mesh.
+
+Validation:
+- full-project `compileall` passes; AST parse passes for 72 Python files.
+- static 3D interaction contract checks confirm reversed target signs, reduced sensitivity, eased yaw/pitch and slower Auto Rotate constants are present. Actual perceived direction/weight still requires Windows visual acceptance because PySide6 is not installed in this Linux sandbox.
+- `update_manager.channel_config()` returns 10-minute cadence from the new source config and correctly falls back to 360 minutes when given an old `check_hours: 6` fixture. Source channel remains unconfigured (`repository: ""`).
+- `packaging/validate_source_tree.py` passes.
+- every `core/*.py` file plus `shared/game_engine.py` and `shared/db.py` remains hash-identical to v7.56.0.
+
+Left for next session:
+Publish/tag v7.56.1 and test the four drag directions + long slow rotations on Windows. The interaction should feel natural and more deliberate. For update discovery, a future tiny release can be published while WITNESS stays open: wait up to ~10 minutes or switch away/back after >60 seconds; the UPDATE button should appear without restarting. Since 3D interaction is now positively validated, the next major Character project is a production-quality rigged model/renderer while keeping the approved Portrait art as the high-fidelity fallback.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-16 -- v7.56.0 Theme Evolution + Interactive 3D Lab
 Requested by: person liked the new dark/modern Character direction and asked whether the entire WITNESS UI could mature with the character (jungle early, increasingly structured/modern later). They also explicitly asked to use remaining pre-Monday time to try a real interactive 3D character rather than stopping at the 2.5D composite artwork.
 

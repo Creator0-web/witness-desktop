@@ -1,3 +1,16 @@
+# v7.56.1 3D Control Feel + Live Update Checks
+
+Current Qt build: **v7.56.1 / `2026-08-16-g`**. Windows testing confirmed the 3D interaction
+concept feels good, but the v7.56.0 drag axes felt inverted and the rotation was too sensitive.
+3D Lab now uses natural reversed-from-v7.56 input on both axes, lower sensitivity, and target/eased
+rotation so inspection feels slower and more powerful rather than cursor-snappy. Auto Rotate is
+slower to match.
+
+The updater no longer effectively depends on restart during active development: release builds check
+10 minutes apart and also perform a throttled background check when the WITNESS window becomes active
+after being away. Startup checking remains. Update discovery/download still runs off the GUI thread and
+installation still requires the explicit **Update & Restart** action.
+
 # v7.56.0 Theme Evolution + Interactive 3D Lab
 
 Current Qt build: **v7.56.0 / `2026-08-16-f`**. The app now evolves through three broad
@@ -77,7 +90,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-16-f / v7.56.0 Theme Evolution + Interactive 3D Lab**
+Current Qt visual build: **2026-08-16-g / v7.56.1 3D Control Feel + Live Update Checks**
 
 ## Desktop distribution / updater (v7.52.1)
 
@@ -85,7 +98,7 @@ The Qt shell can now be packaged as a per-user Windows desktop application. Rele
 use PyInstaller `onedir` + Inno Setup and install program files under
 `%LOCALAPPDATA%\Programs\WITNESS`; personal state remains under `%LOCALAPPDATA%\WITNESS`.
 A packaged build checks its configured public GitHub Releases channel shortly after launch
-and every six hours. New stable versions surface as **UPDATE vX.Y.Z** in the top bar.
+every 10 minutes and on throttled window re-activation. New stable versions surface as **UPDATE vX.Y.Z** in the top bar.
 Update & Restart downloads off-thread, verifies the release SHA-256, exits, runs the installer,
 and reopens WITNESS. Source/dev builds ship with a blank release repository and do not make
 update-network requests.
