@@ -615,7 +615,7 @@ class ArenaPage(QScrollArea):
                 f"{val:,} rolling XP · {pct}% conquered · {lvl['xp_to_next']:,} to next level")
         else:
             self.level_progress.set_target_value(1000)
-            self.level_detail.setText(f"{lvl['rating']:,} rolling XP · top V1 tier")
+            self.level_detail.setText(f"{lvl['rating']:,} rolling XP · Sovereign tier")
         if lvl.get("at_risk"):
             self.level_detail.setStyleSheet(f"color:{theme.RED};")
         elif lvl.get("comeback_active"):

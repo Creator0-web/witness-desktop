@@ -5,9 +5,9 @@ canonical game ledger / level state and translates proven behavior into a
 visual character state: charge, earned traits, protection shield progress and
 environment unlocks. None of these values award XP or change Ghost/level math.
 
-The first avatar renderer is a lightweight 2.5D/vector presentation so the
-interaction model can be proven without adding a 3D-engine dependency. A true
-3D renderer can replace the visual layer later while keeping this contract.
+The current avatar renderer is an image-led 2.5D presentation so the interaction
+model can be proven without adding a 3D-engine dependency. A true 3D renderer can
+replace the visual layer later while keeping this contract.
 """
 from __future__ import annotations
 
@@ -20,13 +20,12 @@ import game_engine
 
 ENV_KEY = "character_environment_v1"
 
-FORM_PEAK_KEY = "character_peak_rating_v1"
+FORM_PEAK_KEY = "character_peak_rating_v1"  # derived cache; corrected history may lower it
+FORM_RECONCILE_KEY = "character_peak_reconcile_v1"
 
-# Character evolution is a presentation layer over the canonical rolling Level
-# Rating. It does not create a second XP currency or alter game-engine levels.
-# The first five milestones align with the existing canonical level thresholds;
-# later forms extend the same rating curve so the visual journey can keep growing
-# after the current top V1 game level.
+# Character evolution now mirrors the canonical eight-level ladder one-for-one.
+# Current form follows the current canonical level; historical peak controls which
+# earlier/higher chapters remain unlocked for revisiting.
 EVOLUTION_STAGES = [
     {"id": "wanderer", "name": "Wanderer", "threshold": 0,
      "asset": "01_wanderer.png", "world": "Wild Path",
@@ -55,6 +54,12 @@ EVOLUTION_STAGES = [
 ]
 
 
+# Keep visual stage thresholds impossible to drift from the canonical ladder.
+for _stage, _tier in zip(EVOLUTION_STAGES, game_engine.LEVELS):
+    _stage["threshold"] = int(_tier["threshold"])
+    _stage["name"] = str(_tier["name"])
+
+
 def _int_state(key: str, default=0) -> int:
     try:
         return int(float(db.game_state_get(key, str(default)) or default))
@@ -62,55 +67,72 @@ def _int_state(key: str, default=0) -> int:
         return int(default)
 
 
-def evolution_for_peak_rating(peak_rating: int) -> dict:
-    """Project a permanent visual form from the canonical Level Rating peak."""
-    peak = max(0, int(peak_rating or 0))
-    index = 0
-    for i, stage in enumerate(EVOLUTION_STAGES):
-        if peak >= int(stage["threshold"]):
-            index = i
-    current = dict(EVOLUTION_STAGES[index])
-    next_stage = dict(EVOLUTION_STAGES[index + 1]) if index + 1 < len(EVOLUTION_STAGES) else None
+def evolution_for_level(level_state: dict, peak_rating: int | None = None) -> dict:
+    """Project current form + permanent chapter unlocks from canonical level state."""
+    level_state = dict(level_state or {})
+    current_level = max(1, min(len(EVOLUTION_STAGES), int(level_state.get("current_level", 1) or 1)))
+    peak_level = max(current_level, min(len(EVOLUTION_STAGES), int(level_state.get("peak_level", current_level) or current_level)))
+    rating = max(0, int(level_state.get("rating", 0) or 0))
+    current = dict(EVOLUTION_STAGES[current_level - 1])
+    current["index"] = current_level
+    current["unlocked"] = True
+    next_stage = dict(EVOLUTION_STAGES[current_level]) if current_level < len(EVOLUTION_STAGES) else None
+    if next_stage is not None:
+        next_stage["index"] = current_level + 1
+        next_stage["unlocked"] = (current_level + 1) <= peak_level
     if next_stage is None:
         progress = 1.0
         to_next = 0
     else:
         start = int(current["threshold"]); end = int(next_stage["threshold"])
-        progress = max(0.0, min(1.0, (peak - start) / max(1, end - start)))
-        to_next = max(0, end - peak)
+        progress = max(0.0, min(1.0, (rating - start) / max(1, end - start)))
+        to_next = max(0, end - rating)
+    if peak_rating is None:
+        peak_rating = rating
+    peak_rating = max(0, int(peak_rating or 0))
     catalog = []
     for i, stage in enumerate(EVOLUTION_STAGES):
         row = dict(stage)
         row["index"] = i + 1
-        row["unlocked"] = peak >= int(stage["threshold"])
+        row["unlocked"] = (i + 1) <= peak_level
         catalog.append(row)
     return {
-        "peak_rating": peak,
-        "index": index + 1,
+        "peak_rating": peak_rating,
+        "index": current_level,
         "count": len(EVOLUTION_STAGES),
         "current": current,
         "next": next_stage,
         "progress": progress,
         "rating_to_next": to_next,
         "stages": catalog,
+        "peak_level": peak_level,
     }
 
 
 def _project_peak_rating(current_rating: int, include_history=False) -> int:
+    """Cached exact historical peak; unlike an unlock currency, corrections may lower it."""
     current = max(0, int(current_rating or 0))
     demo_mode = db.game_state_get("demo_mode", "0") == "1"
     stored = 0 if demo_mode else _int_state(FORM_PEAK_KEY, 0)
-    historical = 0
-    if include_history:
+    reconcile = (not demo_mode and db.game_state_get(FORM_RECONCILE_KEY, "0") == "1")
+    historical = None
+    if include_history or reconcile:
         try:
             historical = int(game_engine.progression_snapshot()["all_time"]["peak_rating"] or 0)
         except Exception:
-            historical = 0
-    peak = max(current, stored, historical)
-    # Synthetic demo history must never permanently unlock real-account forms.
-    if not demo_mode and peak > stored:
-        db.game_state_set(FORM_PEAK_KEY, str(peak))
-    return peak
+            historical = current
+    if historical is not None:
+        peak = max(current, historical)
+        if not demo_mode:
+            # This is a cache of derived history, not an irreversible unlock ledger.
+            # Manual undo can legitimately lower historical peak and therefore
+            # must be allowed to lower the cache as well.
+            db.game_state_set(FORM_PEAK_KEY, str(peak))
+            db.game_state_set(FORM_RECONCILE_KEY, "0")
+        return peak
+    return max(current, stored)
+
+
 
 ENVIRONMENTS = [
     {"id": "training", "name": "Training Room", "unlock_level": 1,
@@ -402,7 +424,7 @@ def live_state(now_ts=None) -> dict:
         "charge": _charge_from_dashboard(snap),
         "environment": selected_environment(level.get("peak_level", 1)),
         "environments": envs,
-        "evolution": evolution_for_peak_rating(peak_rating),
+        "evolution": evolution_for_level(level, peak_rating),
         "demo_preview": db.game_state_get("demo_mode", "0") == "1",
         "battle": snap.get("daily_battle", {}),
     }
@@ -415,7 +437,7 @@ def snapshot(now_ts=None) -> dict:
     # Level Rating already earned. The 2-second live path never does this scan.
     rating = int(live.get("level", {}).get("rating", 0) or 0)
     peak_rating = _project_peak_rating(rating, include_history=True)
-    live["evolution"] = evolution_for_peak_rating(peak_rating)
+    live["evolution"] = evolution_for_level(live.get("level", {}), peak_rating)
     shield = protection_shield()
     live["shield"] = shield
     live["attributes"] = attributes(shield=shield)

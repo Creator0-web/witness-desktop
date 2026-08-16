@@ -36,11 +36,12 @@ def _pixmap(asset: str) -> QPixmap:
 
 
 class CharacterScene(QWidget):
-    """Image-led 2.5D Character scene.
+    """Image-led 2.5D living portrait.
 
-    The approved artwork is the hero. Dragging pans the scene, the wheel gives a
-    restrained inspect zoom, and light particles/core/shield effects make the
-    still illustration breathe without pretending it is a full 3D model.
+    The approved composite artwork remains the source image. V7.54 adds only
+    presentation motion: restrained idle breathing, cursor parallax, drifting
+    atmosphere, Core pulse and cross-fades between forms. It deliberately does
+    not pretend the still artwork is a rotatable 3D model.
     """
 
     def __init__(self, parent=None):
@@ -48,6 +49,8 @@ class CharacterScene(QWidget):
         self.setMinimumHeight(600)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.stage = dict(character_engine.EVOLUTION_STAGES[0])
+        self._previous_stage = None
+        self._transition = 1.0
         self.charge = 0
         self.shield = {"unlocked": False, "progress": 0, "tier": 0}
         self.zoom = 1.0
@@ -55,14 +58,26 @@ class CharacterScene(QWidget):
         self.pan_y = 0.0
         self._drag = None
         self._phase = 0.0
+        self._hover_target_x = 0.0
+        self._hover_target_y = 0.0
+        self._hover_x = 0.0
+        self._hover_y = 0.0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
+        # ~18 FPS is enough for ambient motion and keeps the full-frame pixmap
+        # cheaper than a game-loop refresh.
         self._timer.start(55)
         self.setMouseTracking(True)
-        self.setToolTip("Drag to inspect · Mouse wheel to zoom")
+        self.setToolTip("Move to inspect · Drag to pan · Mouse wheel to zoom")
 
     def set_scene(self, stage: dict, state: dict):
-        self.stage = dict(stage or character_engine.EVOLUTION_STAGES[0])
+        incoming = dict(stage or character_engine.EVOLUTION_STAGES[0])
+        old_asset = str(self.stage.get("asset", ""))
+        new_asset = str(incoming.get("asset", ""))
+        if old_asset and new_asset and old_asset != new_asset:
+            self._previous_stage = dict(self.stage)
+            self._transition = 0.0
+        self.stage = incoming
         self.charge = max(0, min(100, int(state.get("charge", {}).get("percent", 0) or 0)))
         if state.get("shield"):
             self.shield = dict(state["shield"])
@@ -72,6 +87,13 @@ class CharacterScene(QWidget):
         if not self.isVisible():
             return
         self._phase = (self._phase + 0.04) % (math.pi * 1000)
+        # Smooth passive parallax instead of snapping to pointer position.
+        self._hover_x += (self._hover_target_x - self._hover_x) * 0.10
+        self._hover_y += (self._hover_target_y - self._hover_y) * 0.10
+        if self._previous_stage is not None:
+            self._transition = min(1.0, self._transition + 0.055)
+            if self._transition >= 1.0:
+                self._previous_stage = None
         self.update()
 
     def mousePressEvent(self, event):
@@ -81,15 +103,25 @@ class CharacterScene(QWidget):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        pos = event.position()
         if self._drag is not None:
-            pos = event.position()
             dx = pos.x() - self._drag.x()
             dy = pos.y() - self._drag.y()
             self._drag = pos
             self.pan_x = max(-1.0, min(1.0, self.pan_x - dx / max(100.0, self.width() * 0.30)))
             self.pan_y = max(-0.7, min(0.7, self.pan_y - dy / max(100.0, self.height() * 0.34)))
-            self.update()
+        else:
+            nx = (pos.x() / max(1.0, self.width()) - 0.5) * 2.0
+            ny = (pos.y() / max(1.0, self.height()) - 0.5) * 2.0
+            self._hover_target_x = max(-0.16, min(0.16, nx * 0.16))
+            self._hover_target_y = max(-0.09, min(0.09, ny * 0.09))
+        self.update()
         super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        self._hover_target_x = 0.0
+        self._hover_target_y = 0.0
+        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -106,11 +138,18 @@ class CharacterScene(QWidget):
     def mouseDoubleClickEvent(self, event):
         self.zoom = 1.0
         self.pan_x = self.pan_y = 0.0
+        self._hover_target_x = self._hover_target_y = 0.0
+        self._hover_x = self._hover_y = 0.0
         self.update()
         super().mouseDoubleClickEvent(event)
 
-    def _draw_cover(self, p: QPainter, r: QRectF):
-        pm = _pixmap(self.stage.get("asset", ""))
+    @staticmethod
+    def _ease(value: float) -> float:
+        value = max(0.0, min(1.0, float(value)))
+        return value * value * (3.0 - 2.0 * value)
+
+    def _draw_stage_cover(self, p: QPainter, r: QRectF, stage: dict, opacity=1.0):
+        pm = _pixmap(stage.get("asset", ""))
         if pm.isNull():
             p.fillRect(r, QColor(theme.SURFACE_2))
             p.setPen(QColor(theme.TEXT_2))
@@ -120,58 +159,97 @@ class CharacterScene(QWidget):
         iw, ih = float(pm.width()), float(pm.height())
         rw, rh = max(1.0, r.width()), max(1.0, r.height())
         base_scale = max(rw / iw, rh / ih)
-        breath = 1.0 + math.sin(self._phase * 0.65) * 0.0018
+        # This is intentionally tiny: it reads as breathing/camera life, not
+        # obvious zooming of the entire composite image.
+        breath = 1.0 + math.sin(self._phase * 0.68) * 0.0032
         scale = base_scale * self.zoom * breath
         source_w = rw / scale
         source_h = rh / scale
         extra_x = max(0.0, iw - source_w)
         extra_y = max(0.0, ih - source_h)
-        cx = iw / 2.0 + self.pan_x * extra_x * 0.45 + math.sin(self._phase * 0.20) * extra_x * 0.012
-        cy = ih / 2.0 + self.pan_y * extra_y * 0.38
+        inspect_x = max(-1.0, min(1.0, self.pan_x + self._hover_x))
+        inspect_y = max(-0.75, min(0.75, self.pan_y + self._hover_y))
+        cx = (iw / 2.0 + inspect_x * extra_x * 0.45
+              + math.sin(self._phase * 0.20) * extra_x * 0.008)
+        cy = (ih / 2.0 + inspect_y * extra_y * 0.38
+              + math.sin(self._phase * 0.68) * extra_y * 0.006)
         sx = max(0.0, min(iw - source_w, cx - source_w / 2.0))
         sy = max(0.0, min(ih - source_h, cy - source_h / 2.0))
         src = QRectF(sx, sy, source_w, source_h)
+        p.save()
+        p.setOpacity(max(0.0, min(1.0, opacity)))
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         p.drawPixmap(r, pm, src)
+        p.restore()
+
+    def _draw_cover(self, p: QPainter, r: QRectF):
+        if self._previous_stage is None:
+            self._draw_stage_cover(p, r, self.stage, 1.0)
+            return
+        t = self._ease(self._transition)
+        self._draw_stage_cover(p, r, self._previous_stage, 1.0 - t)
+        self._draw_stage_cover(p, r, self.stage, t)
+
+    def _draw_fog(self, p: QPainter, r: QRectF, strength=1.0):
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        for i in range(4):
+            drift = math.sin(self._phase * (0.11 + i * 0.015) + i * 1.7)
+            x = r.left() + r.width() * (0.08 + i * 0.26) + drift * r.width() * 0.06
+            y = r.top() + r.height() * (0.66 + (i % 2) * 0.09)
+            radius = r.width() * (0.20 + i * 0.018)
+            grad = QRadialGradient(QPointF(x, y), radius)
+            inner = QColor("#a8b2ac")
+            inner.setAlpha(int(12 * strength))
+            edge = QColor("#a8b2ac"); edge.setAlpha(0)
+            grad.setColorAt(0.0, inner); grad.setColorAt(1.0, edge)
+            p.setBrush(grad)
+            p.drawEllipse(QPointF(x, y), radius, radius * 0.34)
+        p.restore()
 
     def _draw_motion(self, p: QPainter, r: QRectF):
         index = int(self.stage.get("index", 1) or 1)
-        p.setPen(Qt.PenStyle.NoPen)
         if index <= 4:
+            self._draw_fog(p, r, 1.0 if index <= 2 else 0.72)
             # Early chapters: slow fireflies / inner-world particles.
-            for i in range(26):
+            p.setPen(Qt.PenStyle.NoPen)
+            count = 24 if index <= 2 else 17
+            for i in range(count):
                 x = r.left() + ((i * 137.0 + math.sin(self._phase * 0.35 + i) * 22) % max(1.0, r.width()))
                 y = r.top() + ((i * 79.0 - self._phase * (3 + i % 3)) % max(1.0, r.height()))
-                alpha = 32 + (i % 5) * 12
+                alpha = 28 + (i % 5) * 11
                 c = QColor("#e9c36a"); c.setAlpha(alpha)
                 p.setBrush(c)
-                radius = 1.2 + (i % 3) * 0.55
+                radius = 1.0 + (i % 3) * 0.50
                 p.drawEllipse(QPointF(x, y), radius, radius)
         else:
-            # Civilization chapters: restrained rain, stronger on Operator+.
-            count = 20 if index == 5 else 34
+            # Civilization chapters: low mist + restrained rain. Operator and
+            # beyond are a little sharper, but never a distracting storm loop.
+            self._draw_fog(p, r, 0.48 if index == 5 else 0.32)
+            count = 20 if index == 5 else (30 if index == 6 else 24)
             for i in range(count):
                 x = r.left() + ((i * 113.0 + self._phase * (11 + i % 5)) % max(1.0, r.width()))
                 y = r.top() + ((i * 71.0 + self._phase * (45 + i % 7)) % max(1.0, r.height()))
-                c = QColor("#c5d1d8"); c.setAlpha(26 + (i % 4) * 9)
+                c = QColor("#c5d1d8"); c.setAlpha(22 + (i % 4) * 8)
                 p.setPen(QPen(c, 1))
-                length = 8 + (i % 4) * 3
+                length = 7 + (i % 4) * 3
                 p.drawLine(QPointF(x, y), QPointF(x - 2.0, y + length))
 
     def _draw_core(self, p: QPainter, r: QRectF):
-        # The art already contains the core. This only makes today's charge feel
-        # live; it never changes score and intentionally stays subtle.
+        # The approved art already contains the Core. This overlay only makes
+        # today's canonical Charge feel alive.
         pct = self.charge / 100.0
         if pct <= 0:
             return
         cx = r.left() + r.width() * 0.50
-        cy = r.top() + r.height() * 0.295
-        pulse = (math.sin(self._phase * 2.2) + 1.0) * 0.5
-        radius = 24 + 34 * pct + pulse * 5
+        cy = r.top() + r.height() * 0.305
+        pulse = (math.sin(self._phase * (1.65 + pct * 0.9)) + 1.0) * 0.5
+        radius = 22 + 30 * pct + pulse * (3 + 4 * pct)
         grad = QRadialGradient(QPointF(cx, cy), radius)
-        hot = QColor("#efc36a"); hot.setAlpha(int(36 + 62 * pct))
+        hot = QColor("#efc36a"); hot.setAlpha(int(24 + 58 * pct + pulse * 18 * pct))
+        warm = QColor("#d4a84f"); warm.setAlpha(int(10 + 22 * pct))
         edge = QColor("#efc36a"); edge.setAlpha(0)
-        grad.setColorAt(0.0, hot); grad.setColorAt(1.0, edge)
+        grad.setColorAt(0.0, hot); grad.setColorAt(0.35, warm); grad.setColorAt(1.0, edge)
         p.setPen(Qt.PenStyle.NoPen); p.setBrush(grad)
         p.drawEllipse(QPointF(cx, cy), radius, radius)
 
@@ -180,10 +258,10 @@ class CharacterScene(QWidget):
             return
         tier = max(1, int(self.shield.get("tier", 1) or 1))
         pulse = (math.sin(self._phase * 1.35) + 1.0) * 0.5
-        alpha = min(90, 34 + tier * 10 + int(pulse * 14))
+        alpha = min(90, 30 + tier * 10 + int(pulse * 14))
         c = QColor(theme.GREEN); c.setAlpha(alpha)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(c, 1.4 + tier * 0.35))
+        p.setPen(QPen(c, 1.35 + tier * 0.32))
         shield_rect = QRectF(
             r.center().x() - r.width() * 0.18,
             r.top() + r.height() * 0.075,
@@ -262,13 +340,13 @@ class CharacterPage(QScrollArea):
         stage_top.addStretch(1); stage_top.addWidget(self.world_name)
         sl.addLayout(stage_top)
         self.scene = CharacterScene(); sl.addWidget(self.scene, 1)
-        hint = QLabel("DRAG TO INSPECT  ·  WHEEL TO ZOOM  ·  DOUBLE-CLICK TO RESET VIEW")
+        hint = QLabel("MOVE FOR DEPTH  ·  DRAG TO PAN  ·  WHEEL TO ZOOM  ·  DOUBLE-CLICK TO RESET")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter); hint.setObjectName("Muted")
         sl.addWidget(hint)
 
         journey_head = QHBoxLayout()
         jtitle = QLabel("JOURNEY"); jtitle.setObjectName("Eyebrow")
-        self.journey_help = QLabel("Earn forms with peak Level Rating. Unlocked chapters can always be revisited.")
+        self.journey_help = QLabel("Current form follows your live level. Peak forms stay available as memories.")
         self.journey_help.setObjectName("Muted")
         journey_head.addWidget(jtitle); journey_head.addSpacing(8); journey_head.addWidget(self.journey_help); journey_head.addStretch(1)
         sl.addLayout(journey_head)
@@ -432,16 +510,17 @@ class CharacterPage(QScrollArea):
         progress = max(0.0, min(1.0, float(evo.get("progress", 0.0) or 0.0)))
         self.evo_bar.set_target_value(int(progress * 1000))
         peak_rating = int(evo.get("peak_rating", 0) or 0)
+        level = snap.get("level", {})
+        rating = int(level.get("rating", 0) or 0)
         next_stage = evo.get("next")
         if next_stage:
             self.evo_help.setText(
-                f"Peak Level Rating {peak_rating:,} · {int(evo.get('rating_to_next', 0) or 0):,} to {next_stage.get('name', 'next form')}.")
+                f"Level Rating {rating:,} · {int(evo.get('rating_to_next', 0) or 0):,} to {next_stage.get('name', 'next form')} · peak {peak_rating:,}.")
         else:
-            self.evo_help.setText(f"Peak Level Rating {peak_rating:,} · final V1 evolution earned.")
+            self.evo_help.setText(f"Level Rating {rating:,} · Sovereign reached · peak {peak_rating:,}.")
 
-        level = snap.get("level", {})
         self.level_lbl.setText(
-            f"LV. {int(level.get('current_level', 1) or 1)} {str(level.get('name', 'Recruit')).upper()}"
+            f"LV. {int(level.get('current_level', 1) or 1)} {str(level.get('name', 'Wanderer')).upper()}"
             f"  ·  {int(level.get('rating', 0) or 0):,} rolling XP")
 
         ch = snap.get("charge", {})

@@ -1,3 +1,19 @@
+# v7.54.0 Eight-Stage Progression + Character Alive V2
+
+Current Qt build: **v7.54.0 / `2026-08-16-c`**. Canonical rolling levels now align one-for-one
+with the approved Character journey: Wanderer, Seeker, Apprentice, Builder, Disciplined Man,
+Operator, Elite and Sovereign at 0 / 5,000 / 12,800 / 24,100 / 39,200 / 55,000 / 75,000 /
+100,000 Level Rating. The first five thresholds are unchanged.
+
+Manual Undo is now treated as an explicit ledger correction: after a reversal, current and peak
+level state are reconciled immediately from corrected XP history, so accidental/test promotions do
+not linger through the normal 48-hour demotion grace. Ordinary performance decay keeps the existing
+85% floor + 48-hour grace and comeback behavior.
+
+Character Alive V2 remains intentionally 2.5D: approved composite art gets subtle pointer parallax,
+breathing/camera drift, jungle fog/fireflies, city haze/rain, charge-responsive Core pulse, Shield
+field, and smooth cross-fades between forms. No animation owns or invents XP.
+
 # v7.53.0 Character Art Progression V1
 
 Current Qt build: **v7.53.0 / `2026-08-16-b`**. The dedicated Character page now uses the
@@ -20,7 +36,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-16-b / v7.53.0 Character Art Progression V1**
+Current Qt visual build: **2026-08-16-c / v7.54.0 Eight-Stage Progression + Character Alive V2**
 
 ## Desktop distribution / updater (v7.52.1)
 

@@ -14,40 +14,49 @@ anything in it unless I explicitly say so in this conversation. DEVLOG.md is the
 read every entry because older decisions still apply.
 
 CURRENT FOCUS RIGHT NOW:
-**v7.53.0 / Qt build `2026-08-16-b` — Character Art Progression V1** is the current source.
-The GitHub Windows installer + Update & Restart pipeline has already been proven end-to-end on the
-person's computer; normal future releases should use that path instead of manual reinstalling.
+**v7.54.0 / Qt build `2026-08-16-c` — Eight-Stage Progression + Character Alive V2** is the
+current source. The GitHub Windows installer + Update & Restart pipeline is already proven
+end-to-end; normal releases should use that path instead of manual reinstalling.
 
-CHARACTER STATUS:
-- The person designed and approved eight original character stages and explicitly preferred these
-  originals over later regenerated versions that made the character look skinny/wirey/boney.
-- Canonical V1 art is bundled in `ui_qt/assets/character/` and documented in `CHARACTER_ART.md`:
-  Wanderer → Seeker → Apprentice → Builder → Disciplined Man → Operator → Elite → Sovereign.
-- `shared/character_engine.py` now projects permanent visual form from **peak canonical rolling
-  Level Rating** at 0 / 5,000 / 12,800 / 24,100 / 39,200 / 55,000 / 75,000 / 100,000. This is a
-  visual projection only, not a second scoring system. Do not change canonical XP/Ghost/levels to
-  support the art unless the person explicitly decides to revisit game architecture.
-- `ui_qt/character_page.py` now uses the approved image-led 2.5D scene: full-frame art, restrained
-  pan/zoom, subtle fireflies/rain, current Charge Core pulse, Shield field, and an 8-form Journey
-  strip. Earned earlier forms can be revisited as memories. Demo mode may preview all forms for
-  visual testing.
-- The current art is composite body + environment. V1 therefore treats each image as a **chapter**.
-  Do not pretend a Sovereign is standing in the jungle by displaying the old Wanderer composite.
-  True independent environments should wait for layered assets or a real 3D character pipeline.
-- Fitness/watch/body-shape integration remains deferred. The future Reserve/Inner Core timer idea
-  is also not built yet.
+PROGRESSION / CHARACTER STATUS:
+- The canonical rolling ladder in `shared/game_engine.py` is now eight levels and maps exactly to
+  the approved art journey: Wanderer (0) → Seeker (5,000) → Apprentice (12,800) → Builder
+  (24,100) → Disciplined Man (39,200) → Operator (55,000) → Elite (75,000) → Sovereign
+  (100,000). The original first-five thresholds are unchanged; names were aligned and 6–8 added.
+- Current Character form follows the **current canonical level**. Historically earned peak forms
+  remain unlocked in the Journey strip as memories. `shared/character_engine.py` remains a
+  presentation/read layer and never awards XP.
+- Manual Undo is now explicitly a correction, not ordinary weak performance. After reversing an XP
+  event, `game_engine` immediately recomputes current + historical peak level from the corrected
+  immutable ledger, clears false At-Risk state, and asks Character to reconcile its derived peak
+  cache. This fixes the reported case where test XP was undone but the app stayed at Level 5.
+  Ordinary decay still uses the 85% demotion floor + 48-hour grace and 1.5x comeback rules.
+- A one-time ladder migration rebuilds derived level state from the ledger when upgrading from the
+  old five-name ladder, so a stale v7.53 Level 5 caused by already-undone test XP should self-heal
+  on first v7.54 launch.
+- `ui_qt/character_page.py` now has Character Alive V2: approved full-frame art, subtle idle
+  breathing/camera drift, smooth pointer parallax, drag pan/wheel zoom, jungle fog + fireflies,
+  city haze + restrained rain, charge-responsive Core pulse, Shield field, and cross-fades when
+  changing/evolving forms. These effects are delivery only and must remain cheap.
+- The eight approved original images remain canonical. Do not replace them with the later skinny/
+  wirey/boney regenerations. See `CHARACTER_ART.md`.
+- Composite art still couples body + environment. True independent environments / 360° spin need
+  layered or 3D assets later. Fitness/watch/body-shape integration and the future Reserve/Core
+  timer remain deferred.
 
 ACTUAL NEXT STEP ON WINDOWS/GITHUB:
-1. Copy v7.53.0 source over the clean `witness-desktop-local` GitHub checkout.
+1. Copy the contents of v7.54.0's inner `witness` folder over the clean
+   `C:\Users\morea\GitHub\witness-desktop-local` checkout.
 2. Run `powershell -ExecutionPolicy Bypass -File packaging\clean_repository.ps1`; validation must
-   pass before committing.
-3. Commit/push to `main`, create/push tag exactly `v7.53.0`, and wait for the Windows Release
-   Action to turn green.
-4. Do NOT manually install if current WITNESS is healthy. Let installed v7.52.2 detect
-   `UPDATE v7.53.0` and use Update & Restart.
-5. Test CHARACTER on the real Windows screen: image crop/quality, Journey-strip layout, drag/zoom,
-   subtle Core pulse, Shield overlay, fireflies/rain, and demo preview of all forms.
-6. If something is visually wrong, adjust the exact observed issue before changing architecture.
+   pass before committing. If the five personal runtime leftovers reappear in the checkout,
+   remove only those checkout copies (`conversation.json`, `progression.json`, `secrets.json`,
+   `witness.db`, `witness_data.json`) and rerun validation.
+3. Commit/push, create/push tag exactly `v7.54.0`, and wait for Release Windows Desktop to turn green.
+4. Let the installed app discover **UPDATE v7.54.0** and use Update & Restart.
+5. Verify on Windows: the user's previously stuck test level drops to the ledger-supported level;
+   levels/names align with the eight Character forms; spam a test Activity through higher levels and
+   undo it back down; inspect Character parallax/breathing/fog/rain/Core/cross-fade smoothness.
+6. Fight only concrete Windows visual/performance bugs before adding more feature scope.
 
 Security/runtime items still pending before broad public release:
 - Windows code signing / reputation,

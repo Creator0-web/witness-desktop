@@ -21,22 +21,22 @@ Across every form, he must still read as the same person:
 
 ## V1 evolution forms
 
-Character evolution is a presentation layer over the canonical rolling **Level Rating**. It
-never awards XP or changes game levels. Forms are earned permanently from the person's peak
-Level Rating. The first five thresholds align with current V1 game-level entry thresholds;
-forms 6–8 extend the same rating curve beyond the current top game level so the visual journey
-can continue without reopening scoring architecture.
+Character evolution is now aligned **one-for-one with the canonical rolling Level ladder**.
+It never awards XP. The active form follows the current canonical level, while the highest
+historically earned form stays available in the Journey strip as an unlocked memory. The full
+ladder is now eight levels, using the same thresholds the art progression was already designed
+around.
 
-| Form | Peak Rating | World | Visual meaning | Asset |
+| Level / Form | Rating threshold | World | Visual meaning | Asset |
 |---|---:|---|---|---|
-| Wanderer | 0 | Wild Path | raw potential; barefoot, humble, mysterious beginning | `01_wanderer.png` |
-| Seeker | 5,000 | Hidden Ruins | intention; dagger, wraps, first stronger Core | `02_seeker.png` |
-| Apprentice | 12,800 | Training Ruins | discipline; stronger body, staff, deliberate training | `03_apprentice.png` |
-| Builder | 24,100 | Frontier Outpost | self-creation; first boots, structured gear, built environment | `04_builder.png` |
-| Disciplined Man | 39,200 | Old City | control; civilization, refined rugged clothing, quiet confidence | `05_disciplined_man.png` |
-| Operator | 55,000 | City Rooftop | precision; tight agile tactical clothing, fast/powerful silhouette | `06_operator.png` |
-| Elite | 75,000 | High-Rise Terrace | refinement; tailored high-status look, less visible equipment | `07_elite.png` |
-| Sovereign | 100,000 | Sovereign Hall | authority; modern regal presence, minimal visible gear, command | `08_sovereign.png` |
+| 1 · Wanderer | 0 | Wild Path | raw potential; barefoot, humble, mysterious beginning | `01_wanderer.png` |
+| 2 · Seeker | 5,000 | Hidden Ruins | intention; dagger, wraps, first stronger Core | `02_seeker.png` |
+| 3 · Apprentice | 12,800 | Training Ruins | discipline; stronger body, staff, deliberate training | `03_apprentice.png` |
+| 4 · Builder | 24,100 | Frontier Outpost | self-creation; first boots, structured gear, built environment | `04_builder.png` |
+| 5 · Disciplined Man | 39,200 | Old City | control; civilization, refined rugged clothing, quiet confidence | `05_disciplined_man.png` |
+| 6 · Operator | 55,000 | City Rooftop | precision; tight agile tactical clothing, fast/powerful silhouette | `06_operator.png` |
+| 7 · Elite | 75,000 | High-Rise Terrace | refinement; tailored high-status look, less visible equipment | `07_elite.png` |
+| 8 · Sovereign | 100,000 | Sovereign Hall | authority; modern regal presence, minimal visible gear, command | `08_sovereign.png` |
 
 ## World progression
 
@@ -53,7 +53,8 @@ Do not fake that by displaying an old composite as if it were the current body.
 
 ## Core / Charge / Shield
 
-- **Evolution form** = long-term peak Level Rating.
+- **Current evolution form** = current canonical rolling Level (1–8).
+- **Unlocked memories** = historically earned peak level; a normal later demotion does not erase the chapter.
 - **Current Charge** = today's canonical battle XP relative to the existing character charge
   target; it only changes the subtle live Core/aura presentation.
 - **Protection Shield** = existing monitored clean-streak projection; first unlock at 14 clean
@@ -66,13 +67,23 @@ Do not fake that by displaying an old composite as if it were the current body.
 V1 remains 2.5D, not fake 3D:
 
 - art stays dominant;
-- drag pans/inspects the scene;
+- pointer movement gives gentle parallax/depth and drag still pans the scene;
 - wheel zooms slightly;
-- early forms get subtle moving fireflies/particles;
-- city forms get restrained rain;
+- the composite scene has a barely perceptible breathing/camera drift;
+- early forms get drifting fog plus subtle fireflies/particles;
+- city forms get restrained rain and low haze;
 - current Charge gives the Core a soft pulse;
 - an earned Shield adds a restrained protective field;
+- form changes cross-fade rather than snapping;
 - no effect may invent XP or game state.
 
 A future true-3D model can replace the renderer while continuing to consume
 `shared/character_engine.py`.
+
+## Undo / correction behavior (v7.54)
+
+Manual Undo is treated as a correction to the immutable XP ledger, not as ordinary weak
+performance. If an accidental/test Activity created a level-up, reversing those events
+immediately reconciles current level and historical peak against the corrected ledger instead
+of making the false level linger through the normal 48-hour demotion grace. Normal decay still
+uses the existing demotion rules.

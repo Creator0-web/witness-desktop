@@ -1,4 +1,4 @@
-"""WITNESS PySide6 visual shell — v7.53.0 Character Art Progression V1.
+"""WITNESS PySide6 visual shell — v7.54.0 Eight-Stage Progression + Character Alive V2.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.

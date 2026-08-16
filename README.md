@@ -1,5 +1,11 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.54.0 Eight-Stage Progression + Character Alive V2:** canonical rolling levels now map
+> one-for-one to Wanderer → Seeker → Apprentice → Builder → Disciplined Man → Operator → Elite →
+> Sovereign. Manual Undo immediately reconciles false/test promotions, while ordinary decay still
+> keeps the existing 85% floor + 48-hour grace. Character scenes add gentle parallax, breathing,
+> fog/haze and cross-fades on top of the approved art.
+
 > **v7.53.0 Character Art Progression V1:** the Character page now uses the eight approved
 > original evolution artworks and a peak-Level-Rating journey from Wanderer to Sovereign.
 > Existing installed users should receive this through the proven Update & Restart pipeline.
@@ -106,20 +112,20 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.53.0
+### Current Qt state — v7.54.0
 
-The approved responsive Arena/History/Progression/Character structure remains intact. v7.52.1
-keeps v7.51 per-Windows-user profile isolation and the desktop distribution/update foundation while preserving the v7.50 Character-state contract while replacing its placeholder vector avatar
-with the eight approved original character artworks. The page now shows a full-frame image-led
-2.5D scene (drag to inspect, wheel to zoom), permanent peak-Level-Rating evolution, daily-XP
-Core charge, behavior-derived attributes, Protection Shield progress, and a journey strip that
-lets earned earlier forms be revisited as memories. The current composite art couples body and
-world per form; independent swappable environments remain a later layered/3D asset step. The
-small Arena rank emblem opens the Character page.
+The approved responsive Arena/History/Progression/Character structure remains intact. v7.54
+keeps the isolated local profile and proven updater while aligning the canonical rolling ladder
+with the eight approved character forms. The active form now matches the live canonical level;
+historically earned peak forms remain available as memories. The full-frame image-led 2.5D scene
+adds pointer parallax, barely perceptible breathing/camera drift, fog/haze, early fireflies, city
+rain, Core pulse, Shield field and smooth form cross-fades. The current composite art still couples
+body and world per form; independent swappable environments remain a later layered/3D asset step.
+The small Arena rank emblem opens the Character page.
 
 The character layer does **not** change scoring. `shared/character_engine.py` only
 projects canonical game/telemetry history into visual state; `shared/game_engine.py`
-continues to own XP, Ghost, records and rolling levels. Fitness/body integration is
+continues to own XP, Ghost, records and the eight-stage rolling level ladder. Fitness/body integration is
 explicitly deferred.
 
 The v7.49 random passive sound issue remains fixed: Ghost replay can advance visually

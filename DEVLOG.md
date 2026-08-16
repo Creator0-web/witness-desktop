@@ -53,6 +53,76 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-16 -- v7.54.0 eight-stage canonical ladder + Character Alive V2 + undo correction
+Requested by: person tested the v7.53 Character art build, confirmed the first five forms looked/
+worked well, noticed the old canonical app still stopped at Level 5 with old names, asked to build
+the full eight-stage progression + animation pass, and reported a concrete bug: after spamming a
+test Activity to watch upgrades and then undoing it, WITNESS stayed at Level 5.
+
+Touched:
+- `shared/game_engine.py`: canonical rolling ladder now maps one-for-one to the approved Character
+  story: Wanderer 0, Seeker 5,000, Apprentice 12,800, Builder 24,100, Disciplined Man 39,200,
+  Operator 55,000, Elite 75,000, Sovereign 100,000. The original first-five thresholds, 14-day
+  exp(-0.10*d) rating, 85% demotion floor, 48h At-Risk grace, comeback multiplier, battle XP,
+  Ghost and records remain unchanged. Added one-time ladder-state reconciliation for upgrades.
+- `shared/game_engine.py`: explicit manual Undo/reversal now reconciles derived current + historical
+  peak level immediately from the corrected immutable XP ledger. Undo is a correction, not weak
+  performance, so false/test promotions no longer linger through the normal 48-hour demotion grace.
+  Normal decay still keeps that grace. Progression display filters old persisted promotion/reclaim
+  dots if the corrected ledger no longer supports the tier on that day.
+- `shared/character_engine.py`: current form follows current canonical level; Journey unlocks follow
+  historical peak level. The peak-rating value is a derived cache rather than an irreversible
+  currency and is allowed to reconcile downward after Undo. Stage names/thresholds are forced from
+  `game_engine.LEVELS` so Character and game ladder cannot silently drift apart again.
+- `ui_qt/character_page.py`: Character Alive V2 keeps the approved composite art but adds restrained
+  living-portrait motion: smooth pointer parallax, drag pan, small inspect zoom, tiny breathing/
+  camera drift, drifting jungle fog + fireflies, city haze + rain, charge-responsive Core pulse,
+  existing Shield field, and smooth cross-fades between forms. This is still 2.5D presentation,
+  not fake 360-degree 3D.
+- `ui_qt/widgets.py`: small Arena rank emblem now has eight ring segments and defaults to Wanderer.
+- `ui_qt/arena.py`: top-tier copy now says Sovereign tier.
+- `app_version.py`, `qt_main.py`, `ARCHITECTURE.md`, `CHARACTER_ART.md`, `QT_BUILD.md`, `README.md`,
+  `DISTRIBUTION.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.54.0 / `2026-08-16-c`.
+
+Did NOT touch: `core/` in any way; the person did not authorize Layer 1. Also did not modify
+`shared/db.py`, Activity configured XP, Ghost calculations, records, SQLite schema, updater/hash/
+installer logic, local-profile isolation, fitness integration, or the future Reserve timer.
+
+What changed and why:
+The v7.53 art journey had eight visual chapters but the canonical game still exposed only five old
+rank names, creating an obvious product mismatch. The new ladder makes level and character language
+identical. The reported stuck-Level-5 case was traced to two deliberate old behaviors interacting
+poorly with test corrections: level demotion had a 48-hour grace and Character peak unlocks were
+sticky. That behavior is sensible for real performance decay but wrong for Undo, because Undo says
+that XP should never have counted. v7.54 preserves the normal grace while giving explicit ledger
+corrections an immediate reconciliation path.
+
+Validation:
+- Full-project `compileall` passes.
+- Isolated exact-threshold test confirms all 8 levels map to the intended names/thresholds.
+- Isolated test Activity: +60,000 -> Operator; +60,000 again -> Sovereign; first Undo immediately
+  returns to Operator/peak 6; second Undo immediately returns to Wanderer/peak 1. Character current
+  form/unlocked memories reconcile with the corrected ledger and false milestones disappear.
+- Simulated old v7.53 stale state (`current_level=5`, `peak_level=5`, zero corrected XP) self-heals
+  to Level 1 Wanderer on first v7.54 ladder migration.
+- Separate regression confirms ordinary below-floor performance still enters At-Risk with the full
+  48-hour grace instead of immediately demoting.
+- PySide6 is not installed in this Linux sandbox, so the new parallax/breathing/fog/cross-fade
+  smoothness must be judged on the person's Windows installed build.
+
+Left for next session:
+Publish/tag v7.54.0 through the proven GitHub updater path. On Windows verify the previously stuck
+level self-heals, then spam/undo a test Activity across levels 1-8 and inspect Character motion at
+real display scaling. If motion feels too strong/too subtle, tune only the observed effect. Do not
+jump to true 3D yet unless the living portrait still fails to create attachment. Reserve/Core timer,
+independent environments, fitness integration and full Qt Layer-1 runtime migration remain later.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing;
+never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes
+Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update
+NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were
+updated before ending the session.
+
 ## 2026-08-16 -- v7.53.0 Character Art Progression V1: approved 8-form journey
 Requested by: person completed the Character concept-art progression, explicitly preferred the
 original fuller/healthier character set over later regenerated wirey/bonier versions, uploaded

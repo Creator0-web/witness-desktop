@@ -51,16 +51,22 @@ DEMOTION_FLOOR_RATIO = 0.85
 AT_RISK_SECONDS = 48 * 60 * 60
 COMEBACK_MULTIPLIER = 1.5
 
-# Deliberately small V1 ladder from the person's scoring design. It can be
-# expanded later without changing the event ledger or battle math.
+# The canonical ladder now mirrors the approved Character journey one-for-one.
+# Thresholds 1-5 preserve the original V1 math; stages 6-8 extend that same
+# rolling-rating curve so Arena, History and Character all speak one language.
 LEVELS = [
-    {"level": 1, "threshold": 0, "name": "Recruit"},
-    {"level": 2, "threshold": 5000, "name": "Operative"},
-    {"level": 3, "threshold": 12800, "name": "Specialist"},
-    {"level": 4, "threshold": 24100, "name": "Commando"},
-    {"level": 5, "threshold": 39200, "name": "Sentinel"},
+    {"level": 1, "threshold": 0, "name": "Wanderer"},
+    {"level": 2, "threshold": 5000, "name": "Seeker"},
+    {"level": 3, "threshold": 12800, "name": "Apprentice"},
+    {"level": 4, "threshold": 24100, "name": "Builder"},
+    {"level": 5, "threshold": 39200, "name": "Disciplined Man"},
+    {"level": 6, "threshold": 55000, "name": "Operator"},
+    {"level": 7, "threshold": 75000, "name": "Elite"},
+    {"level": 8, "threshold": 100000, "name": "Sovereign"},
 ]
 LEVEL_STATE_KEY = "rolling_level_v1"
+LEVEL_LADDER_VERSION_KEY = "rolling_level_ladder_version"
+LEVEL_LADDER_VERSION = 2
 MIGRATION_KEY = "legacy_activities_migrated_v1"
 
 
@@ -175,8 +181,12 @@ def initialize() -> dict:
                         metadata=json.dumps({"from": "data.tasks"}))
                 migrated = True
         db.game_state_set(MIGRATION_KEY, "1")
-    # Creating the level state here prevents the first UI read from feeling
-    # like a migration side effect.
+    # v7.54 aligns the canonical ladder to the eight Character stages. On the
+    # one-time ladder migration, rebuild derived level state from the immutable
+    # ledger. This also clears stale high tiers that can remain after old-build
+    # manual undo because the previous 48h demotion grace treated corrections
+    # like ordinary performance decay.
+    _migrate_level_ladder_if_needed()
     level = level_status()
     return {"migrated_legacy_activities": migrated, "level": level}
 
@@ -341,16 +351,16 @@ def reverse_event(event_id, *, ts=None, source="manual_undo",
         raise NothingToUndo(event_id)
     if db.event_has_reversal(event_id):
         raise NothingToUndo(f"Event {event_id} is already reversed")
-    ts = time.time() if ts is None else float(ts)
+    requested_ts = time.time() if ts is None else float(ts)
+    ledger_ts = requested_ts
     # Reversal belongs to the same scoring day as the original. If a future
-    # history editor reverses an older event, anchor the reversal timestamp
-    # inside that original day too, so day-based and timestamp-range queries
-    # cannot disagree about the score.
+    # history editor reverses an older event, anchor the ledger row inside that
+    # original day too, while keeping requested_ts for *current* derived state.
     day = original["day"]
-    if datetime.fromtimestamp(ts).date().isoformat() != day:
-        ts = min(_day_end_ts(day), float(original["ts"]) + 0.001)
+    if datetime.fromtimestamp(ledger_ts).date().isoformat() != day:
+        ledger_ts = min(_day_end_ts(day), float(original["ts"]) + 0.001)
     rev_id = db.log_xp_event(
-        ts, day, original["activity_id"], original["activity_name"],
+        ledger_ts, day, original["activity_id"], original["activity_name"],
         "reversal", -abs(float(original["quantity"])),
         -abs(int(original["base_xp"])), -abs(int(original["score_xp"])),
         -abs(int(original["level_xp"])), float(original["level_multiplier"]),
@@ -359,9 +369,17 @@ def reverse_event(event_id, *, ts=None, source="manual_undo",
     if sync_legacy:
         _sync_legacy_progression_remove(
             original["activity_name"], abs(int(original["score_xp"])), day)
-    level_status(now_ts=ts)
+
+    # Undo is a correction of the ledger, not a weak-performance day. Reconcile
+    # the derived rolling-level state immediately instead of making a mistaken
+    # promotion linger for the normal 48-hour at-risk grace period. Historical
+    # peak is recomputed from the corrected immutable ledger, so test/mistake XP
+    # that has been fully reversed cannot poison comeback or Character unlocks.
+    corrected_level = _reconcile_level_state_after_correction(
+        reference_day=datetime.fromtimestamp(requested_ts).date(), now_ts=requested_ts)
     out = db.get_xp_event(rev_id)
     out["day_total"] = daily_score(day)
+    out["level"] = corrected_level
     return out
 
 
@@ -760,6 +778,68 @@ def _infer_at_risk_since(current_level, state_updated_ts, ref_day, now_ts):
     return now_ts
 
 
+def _historical_peak_level(end_day=None) -> int:
+    """Highest natural tier still supported by the corrected XP ledger."""
+    end = _as_date(end_day)
+    try:
+        series = rolling_rating_series(end_day=end)
+    except Exception:
+        series = []
+    if not series:
+        return _natural_level(rolling_rating(end)["rating"])
+    return max(_natural_level(int(row.get("rating", 0) or 0)) for row in series)
+
+
+def _save_level_state(current: int, peak: int, at_risk_since, now_ts: float):
+    state = {
+        "current_level": max(1, min(len(LEVELS), int(current))),
+        "peak_level": max(1, min(len(LEVELS), int(peak))),
+        "at_risk_since": at_risk_since,
+        "updated_ts": float(now_ts),
+    }
+    state["peak_level"] = max(state["current_level"], state["peak_level"])
+    db.game_state_set(LEVEL_STATE_KEY, json.dumps(state))
+    return state
+
+
+def _reconcile_level_state_after_correction(reference_day=None, now_ts=None) -> dict:
+    """Rebuild derived level state after an explicit ledger correction/undo.
+
+    Normal score decay still uses the 85% floor + 48-hour grace. An undo is
+    different: the person is saying the original event should not count. The
+    level therefore snaps to the natural tier supported by the corrected ledger
+    and the peak tier is recomputed from corrected history.
+    """
+    now_ts = time.time() if now_ts is None else float(now_ts)
+    ref = _as_date(reference_day or datetime.fromtimestamp(now_ts).date())
+    rating = rolling_rating(ref)["rating"]
+    current = _natural_level(rating)
+    peak = max(current, _historical_peak_level(ref))
+    _save_level_state(current, peak, None, now_ts)
+    # Mark derived presentation caches as needing an exact history reconciliation.
+    db.game_state_set("character_peak_reconcile_v1", "1")
+    return level_status(ref, now_ts)
+
+
+def _migrate_level_ladder_if_needed(now_ts=None):
+    """One-time rebuild when moving from the old five-name ladder to eight stages."""
+    try:
+        version = int(db.game_state_get(LEVEL_LADDER_VERSION_KEY, "0") or 0)
+    except (TypeError, ValueError):
+        version = 0
+    if version >= LEVEL_LADDER_VERSION:
+        return False
+    now_ts = time.time() if now_ts is None else float(now_ts)
+    ref = datetime.fromtimestamp(now_ts).date()
+    rating = rolling_rating(ref)["rating"]
+    current = _natural_level(rating)
+    peak = max(current, _historical_peak_level(ref))
+    _save_level_state(current, peak, None, now_ts)
+    db.game_state_set(LEVEL_LADDER_VERSION_KEY, str(LEVEL_LADDER_VERSION))
+    db.game_state_set("character_peak_reconcile_v1", "1")
+    return True
+
+
 def level_status(reference_day=None, now_ts=None) -> dict:
     """Return and advance the rolling-level state machine.
 
@@ -997,18 +1077,28 @@ def progression_snapshot(end_day=None, now_ts=None) -> dict:
     # later demotion/reclaim/promotion events, de-duplicated by day/to/type.
     merged = list(milestones)
     seen = {(m.get("day"), m.get("to_level"), m.get("event_type")) for m in merged}
+    rating_by_day = {row.get("day"): int(row.get("rating", 0) or 0) for row in series}
     for e in permanent:
+        to_level = int(e.get("to_level") or current)
+        kind = str(e.get("event_type") or "")
+        # A later manual undo can invalidate an old persisted promotion/reclaim.
+        # level_events are derived history; the immutable corrected XP ledger is
+        # authoritative. Hide a positive transition whose tier threshold is no
+        # longer supported by the reconstructed rating on that day.
+        if kind in ("promotion", "reclaim"):
+            event_rating = rating_by_day.get(e.get("day"), int(e.get("rating", 0) or 0))
+            if event_rating < int(_tier(to_level)["threshold"]):
+                continue
         # A real persisted transition is richer than a reconstructed threshold
         # crossing for the same tier/day; show one milestone, not two dots/rows.
         merged = [m for m in merged if not (
             m.get("event_type") == "threshold_crossed" and
             m.get("day") == e.get("day") and
-            int(m.get("to_level") or 0) == int(e.get("to_level") or 0))]
+            int(m.get("to_level") or 0) == to_level)]
         key = (e.get("day"), e.get("to_level"), e.get("event_type"))
         if key in seen:
             continue
         row = dict(e)
-        to_level = int(row.get("to_level") or current)
         row["name"] = _tier(to_level)["name"]
         merged.append(row); seen.add(key)
     merged.sort(key=lambda x: (x.get("day", ""), float(x.get("ts", 0) or 0)))

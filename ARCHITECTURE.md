@@ -47,7 +47,7 @@ Visual tokens live in `ui_qt/theme.py`. Current product direction intentionally
 uses a restrained palette: charcoal neutrals, green primary, red only for
 losing/danger, gold only for records/major victories.
 
-As of **v7.53.0 / build 2026-08-16-b**, the Qt delivery layer has moved beyond a
+As of **v7.54.0 / build 2026-08-16-c**, the Qt delivery layer has moved beyond a
 one-screen preview into the character/emotional-reward phase:
 
 - `ui_qt/arena.py` is the approved visual-structure path: stronger Battle Pacer,
@@ -105,6 +105,17 @@ one-screen preview into the character/emotional-reward phase:
   separate body from environment. The image-led renderer supports restrained pan/zoom,
   firefly/rain motion, daily Charge Core pulse and earned Shield field without pretending a
   static illustration is true 3D.
+- v7.54 aligns the canonical `shared/game_engine.py` ladder to those same eight stages and
+  thresholds: **Wanderer / Seeker / Apprentice / Builder / Disciplined Man / Operator / Elite /
+  Sovereign** at 0 / 5,000 / 12,800 / 24,100 / 39,200 / 55,000 / 75,000 / 100,000 rolling
+  Level Rating. The first five thresholds are unchanged; only names plus stages 6-8 are added.
+  Character `current` form now follows the live canonical level, while historically earned peak
+  forms remain available as memories. Manual Undo is explicitly a ledger correction: after a
+  reversal, derived current/peak level state is reconciled immediately from corrected XP history
+  instead of waiting through the normal 48-hour performance-demotion grace. Ordinary decay still
+  keeps the 85% floor + 48h grace. The Character renderer adds gentle pointer parallax, stronger
+  but restrained breathing/camera drift, fog/haze, charge-responsive Core pulse and form
+  cross-fades; all remain presentation-only and run on the existing light timer.
 - The v7.45 stylesheet explicitly makes QLabel backgrounds transparent. This
   fixed the black-rectangle/old-table look visible in the first Windows Qt
   screenshot; do not reintroduce per-label opaque backgrounds unless a specific
@@ -263,8 +274,13 @@ clients on top of it. Do not rebuild this logic inside either UI. It owns:
 - daily / same-weekday / weekly / per-Activity high-score calculations,
 - completed day-win and week-win streak calculations,
 - 14-day rolling level rating with exponential `exp(-0.10*d)` weighting,
+- an eight-tier ladder aligned to Character: Wanderer (0), Seeker (5,000), Apprentice
+  (12,800), Builder (24,100), Disciplined Man (39,200), Operator (55,000), Elite
+  (75,000), Sovereign (100,000),
 - 85% demotion floors, a 48-hour At-Risk grace period that continues while
   the app is closed, and a 1.5x comeback credit after an actual demotion,
+- immediate level-state reconciliation after explicit Undo/correction so reversed mistake/test
+  XP cannot keep a false tier or peak alive; this exception does not weaken ordinary demotion grace,
 - chart-ready `rolling_rating_series()` / `progression_snapshot()` for the
   Current-Level and All-Time progression views,
 - permanent `level_events` rows for real promotion/demotion/reclaim transitions
@@ -402,6 +418,9 @@ safe to call unconditionally.
 `shared/character_engine.py` translates existing canonical state into visual character
 state. It owns no XP rules. Current contracts:
 
+- **Current form** = current canonical rolling level (1–8); **unlocked memories** = historical
+  peak level. Peak-rating cache is derived, not an irreversible currency, so an explicit Undo may
+  lower it when corrected ledger history no longer supports the old peak.
 - **Charge** = today's exact battle XP relative to the stronger of the prior daily
   record, Ghost's final score, or a small cold-start floor. It changes the avatar's
   current aura/energy only; permanent evolution still comes from rolling Level.

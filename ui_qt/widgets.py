@@ -157,7 +157,7 @@ class RankAvatar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.level = 1
-        self.name = "Recruit"
+        self.name = "Wanderer"
         self._flash = 0.0
         self.setFixedSize(58, 58)
         self.setToolTip("Open Character")
@@ -205,15 +205,18 @@ class RankAvatar(QWidget):
 
         # outer rank ring: more segments become solid as the player advances
         ring = QRectF(r).adjusted(2, 2, -2, -2)
-        segments = 5
+        segments = 8
         filled = min(segments, self.level)
+        arc_step = 360.0 / segments
+        arc_span = arc_step * 0.68
         for i in range(segments):
-            pen = QPen(QColor(theme.GREEN if i < filled else theme.BORDER_STRONG), 2.6)
+            pen = QPen(QColor(theme.GREEN if i < filled else theme.BORDER_STRONG), 2.4)
             if i >= filled:
                 pen.setStyle(Qt.PenStyle.DotLine)
             p.setPen(pen)
             p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawArc(ring, int((90 - i * 72 - 58) * 16), int(50 * 16))
+            start = 90.0 - i * arc_step - arc_span * 0.5
+            p.drawArc(ring, int(start * 16), int(arc_span * 16))
 
         # stylized head + shoulders; it becomes visually stronger at higher tiers
         p.setPen(Qt.PenStyle.NoPen)
