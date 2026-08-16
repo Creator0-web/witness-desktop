@@ -56,9 +56,9 @@ API calls can still leave the machine when integrations are enabled. `secrets.js
 currently stored locally in the profile and remains plain text; stronger Windows secret
 protection is a later hardening step.
 
-## Installed Windows app / updates (v7.52+)
+## Installed Windows app / updates (v7.52.1+)
 
-v7.52 adds the release machinery needed to stop replacing project ZIPs by hand. The target
+v7.52 added the release machinery needed to stop replacing project ZIPs by hand; v7.52.1 hardens the first real installer build. The target
 installed experience is: download `WITNESS-Setup.exe` once, install per-user under
 `%LOCALAPPDATA%\Programs\WITNESS`, then let WITNESS check the published stable release
 channel in the background. When a newer release exists, a compact **UPDATE vX.Y.Z** button
@@ -72,6 +72,11 @@ workflow (`.github/workflows/release-windows.yml`) injects the repository into t
 build, builds the executable with PyInstaller on Windows, wraps it with Inno Setup, and
 publishes `WITNESS-Setup.exe` plus its SHA-256 file to GitHub Releases when a matching
 version tag is pushed. See `DISTRIBUTION.md`.
+
+Before tagging a release, run `packaging\clean_repository.ps1` (for any checkout that ever
+contained the old flat project) and `python packaging/validate_source_tree.py`. v7.52.1 also
+uses a real wait/marker frozen smoke test and clears only the old installed program directory
+on upgrade so stale Python modules cannot survive. Personal profile data is not deleted.
 
 The installer is not code-signed yet; broad distribution should add a trusted Windows
 code-signing certificate. Qt still does not start the complete Layer-1 runtime; packaging
@@ -92,11 +97,10 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.52
+### Current Qt state — v7.52.1
 
-The approved responsive Arena/History/Progression/Character structure remains intact. v7.52
-keeps v7.51 per-Windows-user profile isolation and adds the desktop distribution/update
-foundation while preserving the v7.50 **Character** page: a full-frame interactive 2.5D avatar
+The approved responsive Arena/History/Progression/Character structure remains intact. v7.52.1
+keeps v7.51 per-Windows-user profile isolation and the desktop distribution/update foundation while preserving the v7.50 **Character** page: a full-frame interactive 2.5D avatar
 (drag to rotate, wheel to zoom), level-driven visual evolution, daily-XP charge aura,
 behavior-derived attributes, Protection Shield progress, and level-unlocked Training /
 Winter / Tropical / Desert / City Night environments. The small Arena rank emblem

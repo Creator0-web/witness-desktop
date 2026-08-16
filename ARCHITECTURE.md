@@ -47,7 +47,7 @@ Visual tokens live in `ui_qt/theme.py`. Current product direction intentionally
 uses a restrained palette: charcoal neutrals, green primary, red only for
 losing/danger, gold only for records/major victories.
 
-As of **v7.52 / build 2026-08-15-e**, the Qt delivery layer has moved beyond a
+As of **v7.52.1 / build 2026-08-15-f**, the Qt delivery layer has moved beyond a
 one-screen preview into the character/emotional-reward phase:
 
 - `ui_qt/arena.py` is the approved visual-structure path: stronger Battle Pacer,
@@ -161,6 +161,26 @@ with PyInstaller, smoke-tests the frozen Qt executable offscreen in an isolated 
 compiles the per-user Inno installer, writes its SHA-256 sidecar, and publishes both release
 assets. Because PyInstaller is platform-specific, do not claim a Linux sandbox build proves
 the Windows executable.
+
+**v7.52.1 packaging invariant:** the repository root must not contain old flat duplicates
+like `db.py`, `data.py`, `config.py`, `tracker.py`, etc. Canonical modules live in the
+section folders. `packaging/validate_source_tree.py` fails a release when root shadows,
+Python caches, or personal runtime artifacts are present; `packaging/clean_repository.ps1`
+removes only known obsolete root code shadows/caches. The PyInstaller search path also keeps
+canonical section folders ahead of the project root. This exists because the first v7.52.0
+GitHub repository accidentally retained an old root `db.py`, which could be packaged instead
+of `shared/db.py` and crash at `game_engine.initialize()`.
+
+The frozen smoke test must be a real process/contract test, not just a launch command. The
+release workflow waits for the GUI-subsystem EXE, requires a zero exit code, imposes a timeout,
+and requires `qt_main.py` to write `WITNESS_SMOKE_MARKER` only after the canonical DB/game
+backend and real Qt shell are constructed. The v7.52.0 smoke command could report green even
+when a GUI startup exception occurred, so do not weaken this marker check.
+
+Installed program files are disposable because personal history is in the v7.51 profile.
+`packaging/WITNESS.iss` clears the old `{app}` program directory before copying a new onedir
+build, preventing stale modules from surviving an upgrade. This cleanup must remain scoped
+only to `%LOCALAPPDATA%\Programs\WITNESS`; it must never target `%LOCALAPPDATA%\WITNESS`.
 
 For no-login consumer updating, the release endpoint must be publicly readable. A private
 source repository may later publish binaries to a separate public release host instead; do

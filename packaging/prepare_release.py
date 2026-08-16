@@ -12,13 +12,14 @@ ROOT = Path(__file__).resolve().parent.parent
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", required=True, help="owner/repository")
-    parser.add_argument("--tag", required=True, help="release tag, e.g. v7.52.0")
+    parser.add_argument("--tag", required=True, help="release tag, e.g. v7.52.1")
     args = parser.parse_args()
 
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repository):
         raise SystemExit("Invalid GitHub repository slug")
 
     import sys
+    sys.dont_write_bytecode = True
     sys.path.insert(0, str(ROOT))
     from app_version import VERSION
 

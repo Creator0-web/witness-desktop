@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "7.52.0"
+  #define MyAppVersion "7.52.1"
 #endif
 
 #define MyAppName "WITNESS"
@@ -34,6 +34,13 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
+
+[InstallDelete]
+; Program files are disposable; personal data lives separately under
+; %LOCALAPPDATA%\WITNESS.  Clear the old app directory before copying the
+; new onedir build so stale Python modules from an older/manual install can
+; never survive an upgrade and shadow bundled canonical modules.
+Type: filesandordirs; Name: "{app}\*"
 
 [Files]
 Source: "..\dist\WITNESS\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

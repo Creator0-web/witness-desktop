@@ -40,7 +40,7 @@ For the provided same-repository flow:
 1. Put the clean WITNESS source in a GitHub repository.
 2. Commit the project, including `.github/workflows/release-windows.yml`.
 3. Ensure `app_version.VERSION` matches the release you are about to publish.
-4. Create/push tag `v7.52.0` (or the corresponding future version).
+4. Create/push tag matching `app_version.VERSION` (current hotfix: `v7.52.1`).
 5. GitHub Actions builds on Windows and creates a Release containing exactly:
    `WITNESS-Setup.exe` and `WITNESS-Setup.exe.sha256`.
 6. Give new users the Setup EXE from the latest published release.
@@ -48,6 +48,25 @@ For the provided same-repository flow:
 The CI step runs `packaging/prepare_release.py`, which embeds the repository
 slug in the packaged copy of `release_channel.json`. Development ZIPs keep the
 repository blank so they cannot accidentally self-update.
+
+## Release-source hygiene (v7.52.1+)
+
+The first v7.52.0 repository upload accidentally retained old flat/root Python modules
+from the pre-reorg project, including a legacy `db.py`. That can shadow `shared/db.py`
+during packaging and produce an installed-app startup crash. Before every release:
+
+1. Run `powershell -ExecutionPolicy Bypass -File packaging\clean_repository.ps1` in the
+   Git checkout if it has ever contained an older flat WITNESS tree.
+2. Review the deletions in GitHub Desktop; they should be obsolete root duplicates/caches,
+   never `core/` or personal profile data.
+3. `python packaging/validate_source_tree.py` must print `WITNESS release source validation OK`.
+4. Commit the cleanup/version changes, then create the matching version tag.
+
+The GitHub workflow runs that validation again before PyInstaller. It also uses a hardened
+frozen smoke test: the GUI process is waited on with a timeout and must write a marker after
+the canonical DB/game backend and Qt shell construct successfully. The installer clears only
+the old program directory before copying the new onedir build so stale application modules
+cannot survive an update; `%LOCALAPPDATA%\WITNESS` personal data is outside that directory.
 
 ## Every future WITNESS release
 

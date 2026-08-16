@@ -9,12 +9,15 @@ from pathlib import Path
 
 root = Path.cwd().resolve()
 search_paths = [
-    root,
+    # Match qt_main.py runtime precedence. Keep the project root LAST so an
+    # accidental legacy root-level db.py/data.py cannot shadow canonical
+    # modules under shared/ during PyInstaller analysis.
+    root / "insight",
+    root / "_archive",
     root / "shared",
     root / "character",
     root / "core",
-    root / "_archive",
-    root / "insight",
+    root,
 ]
 
 datas = [(str(root / "release_channel.json"), ".")]

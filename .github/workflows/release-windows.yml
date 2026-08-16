@@ -22,6 +22,10 @@ jobs:
           cache: "pip"
           cache-dependency-path: packaging/requirements-desktop.txt
 
+      - name: Validate clean release source
+        shell: pwsh
+        run: python packaging/validate_source_tree.py
+
       - name: Embed update channel and validate tag
         shell: pwsh
         run: python packaging/prepare_release.py --repository "${{ github.repository }}" --tag "${{ github.ref_name }}"
@@ -41,8 +45,18 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:WITNESS_DATA_DIR = Join-Path $env:RUNNER_TEMP "witness-smoke"
-          & .\dist\WITNESS\WITNESS.exe --smoke-test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:WITNESS_SMOKE_MARKER = Join-Path $env:RUNNER_TEMP "witness-smoke.ok"
+          Remove-Item -Recurse -Force $env:WITNESS_DATA_DIR -ErrorAction SilentlyContinue
+          Remove-Item -Force $env:WITNESS_SMOKE_MARKER -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath ".\dist\WITNESS\WITNESS.exe" -ArgumentList "--smoke-test" -PassThru
+          if (-not $p.WaitForExit(30000)) {
+            try { $p.Kill() } catch {}
+            throw "Frozen WITNESS smoke test timed out."
+          }
+          if ($p.ExitCode -ne 0) { throw "Frozen WITNESS smoke test exited $($p.ExitCode)." }
+          if (-not (Test-Path $env:WITNESS_SMOKE_MARKER)) {
+            throw "Frozen WITNESS never reached the real Qt shell/backend smoke marker."
+          }
 
       - name: Install Inno Setup
         shell: pwsh

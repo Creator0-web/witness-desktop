@@ -1,0 +1,35 @@
+# Python build/cache
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Desktop packaging outputs
+build/
+dist/
+release/
+
+# WITNESS personal/runtime data must never be committed
+witness.db
+witness_data.json
+secrets.json
+profile.json
+import_history.json
+.pending_legacy_import.json
+progression.json
+conversation.json
+xp_triggers.json
+xp_triggers_fired.json
+ui_settings.json
+vision_history.json
+trail_history.json
+stats_model.json
+life_data.json
+block_lock.txt
+recaps/
+sos_videos/
+video_memories/
+day_breakdown_data/
+insight_data/
+journals/

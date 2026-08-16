@@ -53,6 +53,94 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-15 -- v7.52.1 Desktop Packaging Hotfix: stale-module guard + real frozen smoke test
+Requested by: person successfully published the first `v7.52.0` Windows installer through
+GitHub Actions, installed it, and immediately got an unhandled startup exception:
+`AttributeError: module 'db' has no attribute 'game_state_get'` from
+`game_engine.initialize()`. They need the installed-app/update path to be trustworthy before
+using WITNESS as the normal daily app.
+
+Touched:
+- `app_version.py`: patch version -> `7.52.1`, display `v7.52.1`, Qt build
+  `2026-08-15-f`, release name `Desktop Packaging Hotfix`.
+- `.gitignore` (new): ignores Python caches/build outputs and all known local WITNESS
+  runtime/personal-data artifacts (`witness.db`, `secrets.json`, profile/history folders, etc.)
+  so they cannot accidentally enter a release checkout.
+- `packaging/validate_source_tree.py` (new): hard release gate. Fails if obsolete pre-reorg
+  root modules (`db.py`, `data.py`, `config.py`, tracker/core duplicates, archived duplicates,
+  etc.), Python caches, or personal runtime files exist in the source root. Also verifies
+  canonical `shared/db.py` exposes the DB API the game backend requires.
+- `packaging/clean_repository.ps1` (new): Windows cleanup helper for the person's existing
+  Git checkout. Removes ONLY known obsolete root-level code shadows plus Python/build caches;
+  it does not delete personal WITNESS data. It then runs the validator and stops if unsafe
+  artifacts remain.
+- `packaging/witness.spec`: PyInstaller search precedence now mirrors the runtime section
+  precedence and keeps project root last. Canonical `shared/`, `character/`, `core/`, etc.
+  can no longer be silently outranked by an accidental legacy file at repository root.
+- `qt_main.py`: adds an explicit canonical DB API contract check before `db.init()` /
+  `game_engine.initialize()` so a wrong `db` import gives a direct packaging diagnostic.
+  The `--smoke-test` path now writes `WITNESS_SMOKE_MARKER` only AFTER DB/game initialization
+  and the real Qt shell construct successfully.
+- `.github/workflows/release-windows.yml`: runs source-tree validation before packaging.
+  Replaced the weak GUI-EXE smoke invocation with `Start-Process`, a 30-second wait/timeout,
+  exit-code check, and required smoke-marker check. This prevents a GUI-subsystem launch from
+  appearing green when startup actually died before the real shell was reached.
+- `packaging/build_windows.ps1`: same source validation and hardened wait/marker smoke test for
+  local Windows packaging.
+- `packaging/WITNESS.iss`: before copying a new onedir build, deletes the OLD PROGRAM DIRECTORY
+  contents under `%LOCALAPPDATA%\\Programs\\WITNESS`. This is safe because v7.51 moved all
+  personal state to `%LOCALAPPDATA%\\WITNESS`; it prevents stale app modules from surviving an
+  update/install. It does not touch the personal profile.
+- `ARCHITECTURE.md`, `DISTRIBUTION.md`, `QT_BUILD.md`, `README.md`, `NEXT_CHAT_PROMPT.md`:
+  documented the incident, repository hygiene invariant, stronger smoke test, install cleanup,
+  patch release process, and exact next Windows/GitHub steps.
+
+Did NOT touch: `core/` in any way; every `core/*.py` SHA-256 remains byte-for-byte identical
+to v7.52. Also did not modify canonical scoring/Ghost/records/rolling-level rules in
+`shared/game_engine.py`, canonical DB behavior in `shared/db.py`, Character rules, profile
+isolation, History/Progression math, Activities, or Qt responsiveness/game delivery behavior.
+
+What changed and why:
+The first real GitHub repository screenshot revealed old flat/root modules still present even
+though the clean v7.52 source package had already moved those modules into section folders.
+In particular the old root `db.py` is the pre-game schema and does not provide
+`game_state_get`; the installed exception is exactly what happens when that module wins over
+canonical `shared/db.py`. The old release workflow's smoke step was also insufficient for a
+windowed GUI executable: it only launched the EXE and checked `$LASTEXITCODE`, so the Action
+could turn green without proving the application reached its backend + Qt shell. v7.52.1
+fixes BOTH the contamination path and the false-positive test path rather than papering over
+`game_engine.initialize()`.
+
+The program/profile separation from v7.51 is what makes aggressive program-directory cleanup
+safe: installed code is disposable; user XP/history/videos/settings remain outside it. This
+hotfix is a delivery-only correction, not a game-engine change.
+
+Validation:
+- Python AST parse: 70 Python files, 0 parse errors after hotfix edits.
+- `packaging/validate_source_tree.py` passes on the clean source after caches are removed and
+  intentionally fails when a dummy legacy root shadow is introduced.
+- Canonical DB API tokens required at startup are present in `shared/db.py`.
+- Version/tag preparation is set for `7.52.1` / `v7.52.1`.
+- `core/*.py`, `shared/game_engine.py`, and `shared/db.py` hashes match v7.52 exactly.
+- Linux cannot execute the final Windows GUI binary. The real proof is the next GitHub
+  `v7.52.1` Action: the hardened marker smoke test must turn green, then the person installs
+  the new Setup once manually because broken v7.52.0 cannot launch its updater.
+
+Left for next session:
+The person should copy this v7.52.1 source into the existing `witness-desktop` Git checkout,
+run `powershell -ExecutionPolicy Bypass -File packaging\\clean_repository.ps1`, review GitHub
+Desktop deletions (old root duplicates), commit/push, tag **`v7.52.1`**, and wait for the Action.
+If the Action is green, download/install that Setup manually over v7.52.0 and verify WITNESS
+opens. After this one hotfix install, future working versions should use WITNESS's own
+**Update & Restart** flow. If the hardened Action fails, diagnose the exact failed step rather
+than weakening validation/smoke tests.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing;
+never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes
+Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update
+NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were
+updated before ending the session.
+
 ## 2026-08-15 -- v7.52 Desktop Distribution Foundation: Windows installer + one-click update pipeline
 Requested by: person wants to stop downloading/replacing a ZIP for every future WITNESS
 revision. They asked how a brand-new user can download WITNESS once as a normal desktop app

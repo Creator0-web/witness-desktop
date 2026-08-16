@@ -1,8 +1,8 @@
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-15-e / v7.52 Desktop Distribution Foundation**
+Current Qt visual build: **2026-08-15-f / v7.52.1 Desktop Packaging Hotfix**
 
-## Desktop distribution / updater (v7.52)
+## Desktop distribution / updater (v7.52.1)
 
 The Qt shell can now be packaged as a per-user Windows desktop application. Release builds
 use PyInstaller `onedir` + Inno Setup and install program files under
@@ -16,6 +16,14 @@ update-network requests.
 Actual Windows binaries must be built on Windows. `.github/workflows/release-windows.yml`
 provides the automated Windows build/publish path; `packaging/build_windows.ps1` is the local
 Windows equivalent. Code signing is still pending before broad public distribution.
+
+
+v7.52.1 hardens the first installer pipeline after the first real Windows release exposed
+a stale-module collision. Release validation now rejects old root-level module duplicates,
+PyInstaller resolves canonical section folders before the repository root, the frozen smoke
+test waits for the GUI process and requires a post-shell marker, and Inno clears the old
+program directory before installing a new build. Personal `%LOCALAPPDATA%\WITNESS` data is
+not part of that cleanup.
 
 ## Local profile boundary (v7.51)
 

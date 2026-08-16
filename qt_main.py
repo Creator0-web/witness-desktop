@@ -1,4 +1,4 @@
-"""WITNESS PySide6 visual shell — v7.52 Desktop Distribution Foundation.
+"""WITNESS PySide6 visual shell — v7.52.1 Desktop Packaging Hotfix.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.
@@ -27,6 +27,17 @@ def main():
 
     import db
     import game_engine
+    # Packaging contract: the canonical DB module is shared/db.py.  A stale
+    # legacy root-level db.py used to be able to shadow it in a contaminated
+    # source/install folder, producing a cryptic AttributeError at startup.
+    required_db_api = ("game_state_get", "game_state_set",
+                       "list_scoring_activities", "log_xp_event")
+    missing_db_api = [name for name in required_db_api if not hasattr(db, name)]
+    if missing_db_api:
+        origin = getattr(db, "__file__", "<frozen module>")
+        raise RuntimeError(
+            "WITNESS loaded the wrong database module from " + str(origin) +
+            ". Missing canonical DB API: " + ", ".join(missing_db_api))
     db.init()
     game_engine.initialize()
 
@@ -44,6 +55,13 @@ def main():
     app.setOrganizationName("WITNESS")
     win = WitnessMainWindow()
     if "--smoke-test" in sys.argv:
+        marker = os.environ.get("WITNESS_SMOKE_MARKER", "").strip()
+        if marker:
+            try:
+                with open(marker, "w", encoding="utf-8") as f:
+                    f.write("ok\n")
+            except OSError:
+                return 97
         # Used by the Windows release pipeline. Offscreen Qt constructs the real
         # shell/backend and exits quickly without creating a distributable DB.
         win.hide()
