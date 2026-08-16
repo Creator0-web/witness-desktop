@@ -1,3 +1,26 @@
+# v7.55.0 Completion Pass: Core, Safety + Onboarding
+
+Current Qt build: **v7.55.0 / `2026-08-16-d`**. This pass finishes the main V1
+quality-of-life systems around the already-proven Arena/Character loop without changing
+canonical XP, Ghost, records or level math.
+
+- **Core Reserve:** explicit 14-day Start/Reset clock independent of XP/Level/Shield. Reserve
+  drives the inner chest glow; Daily Charge now drives a separate outer aura.
+- **Character payoff:** canonical form changes get a restrained evolution reveal; strongest
+  evidence-backed Attribute is surfaced as the current Signature.
+- **Data Safety:** rotating transaction-consistent local backups, manual backup, full Profile
+  Export, staged next-launch Restore, crash/session marker and local crash report folder. API
+  secrets are excluded from backup/export/restore.
+- **First run:** local-only 3-step onboarding for identity/mission, user-selected starter
+  Activities and a short Ghost/Level explanation. Existing accounts are not forced through it.
+- **Release hygiene:** `clean_repository.ps1` now quarantines known stale runtime leftovers out
+  of a merged Git checkout before hard validation, so future releases should no longer require
+  manual `Remove-Item` cleanup.
+- **Sound:** a quiet Core cue is explicit-action-only. Passive timers still never make sound.
+
+The Qt app still does **not** start the complete Layer-1 tracker/voice/intervention runtime.
+That limitation is unchanged and must not be hidden by the completion/polish work.
+
 # v7.54.0 Eight-Stage Progression + Character Alive V2
 
 Current Qt build: **v7.54.0 / `2026-08-16-c`**. Canonical rolling levels now align one-for-one
@@ -36,7 +59,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-16-c / v7.54.0 Eight-Stage Progression + Character Alive V2**
+Current Qt visual build: **2026-08-16-d / v7.55.0 Completion Pass: Core, Safety + Onboarding**
 
 ## Desktop distribution / updater (v7.52.1)
 

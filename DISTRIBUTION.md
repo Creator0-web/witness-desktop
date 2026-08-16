@@ -13,6 +13,10 @@ Personal history is outside the install directory under the local profile owned
 by `profile_runtime.py`, so installer replacement must never include/delete
 `%LOCALAPPDATA%\WITNESS`.
 
+As of v7.55 the profile also owns rotating local backups (`Backups/`) and crash reports
+(`crash_reports/`). These are user data, not release assets, and must never be copied into
+the source repository or installer.
+
 ## Distribution pieces
 
 - `packaging/witness.spec` — Windows PyInstaller **onedir** build.
@@ -40,7 +44,7 @@ For the provided same-repository flow:
 1. Put the clean WITNESS source in a GitHub repository.
 2. Commit the project, including `.github/workflows/release-windows.yml`.
 3. Ensure `app_version.VERSION` matches the release you are about to publish.
-4. Create/push tag matching `app_version.VERSION` (current release: `v7.54.0`).
+4. Create/push tag matching `app_version.VERSION` (current release: `v7.55.0`).
 5. GitHub Actions builds on Windows and creates a Release containing exactly:
    `WITNESS-Setup.exe` and `WITNESS-Setup.exe.sha256`.
 6. Give new users the Setup EXE from the latest published release.
@@ -57,10 +61,17 @@ during packaging and produce an installed-app startup crash. Before every releas
 
 1. Run `powershell -ExecutionPolicy Bypass -File packaging\clean_repository.ps1` in the
    Git checkout if it has ever contained an older flat WITNESS tree.
-2. Review the deletions in GitHub Desktop; they should be obsolete root duplicates/caches,
-   never `core/` or personal profile data.
-3. `python packaging/validate_source_tree.py` must print `WITNESS release source validation OK`.
-4. Commit the cleanup/version changes, then create the matching version tag.
+2. v7.55+ automatically moves any known stale **runtime/personal leftovers** created by Windows
+   folder-merging out of the Git checkout into
+   `%LOCALAPPDATA%\WITNESS\release-quarantine\<timestamp>`. It identifies them only by known
+   names and never reads their contents. This includes `secrets.json`; it is quarantined, never
+   opened. Obsolete flat root code and caches are still removed.
+3. Review GitHub Desktop. Runtime leftovers should no longer require manual `Remove-Item`; the
+   quarantine lives outside the repository. `core/` and the real local profile are never cleanup
+   targets.
+4. `python packaging/validate_source_tree.py` must print `WITNESS release source validation OK`.
+   Validation still hard-fails if any unsafe artifact remains.
+5. Commit the cleanup/version changes, then create the matching version tag.
 
 The GitHub workflow runs that validation again before PyInstaller. It also uses a hardened
 frozen smoke test: the GUI process is waited on with a timeout and must write a marker after

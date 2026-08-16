@@ -51,16 +51,18 @@ revisited as memories. A later true-3D / layered-asset pass can separate avatar 
 so a Sovereign can physically stand in the original jungle without showing the Wanderer body.
 Do not fake that by displaying an old composite as if it were the current body.
 
-## Core / Charge / Shield
+## Evolution / Charge / Core Reserve / Shield
 
 - **Current evolution form** = current canonical rolling Level (1–8).
 - **Unlocked memories** = historically earned peak level; a normal later demotion does not erase the chapter.
-- **Current Charge** = today's canonical battle XP relative to the existing character charge
-  target; it only changes the subtle live Core/aura presentation.
-- **Protection Shield** = existing monitored clean-streak projection; first unlock at 14 clean
-  monitored days, then 30/60/90 strengthening tiers.
-- A future **Reserve / Inner Core timer** may be added as a separate user-defined behavioral
-  state. It is deliberately not part of this V1 build yet.
+- **Daily Charge** = today's canonical battle XP relative to the existing character charge target.
+  It drives a restrained **outer aura** only; it does not define the inner Core.
+- **Core Reserve** = an explicit user-controlled 14-day personal timer stored in `game_state`.
+  Start/Reset is intentional and independent of XP, Level, unlocked forms, Charge and Shield.
+  It is a behavioral/visual metaphor, not a medical measurement. Reserve state progresses
+  SPARK → AWAKE → BUILDING → STEADY → VIBRANT and drives the **inner chest glow**.
+- **Protection Shield** = monitored clean-streak projection; first unlock at 14 clean monitored
+  days, then 30/60/90 strengthening tiers. Missing telemetry never counts as a clean day.
 
 ## Motion direction
 
@@ -72,9 +74,10 @@ V1 remains 2.5D, not fake 3D:
 - the composite scene has a barely perceptible breathing/camera drift;
 - early forms get drifting fog plus subtle fireflies/particles;
 - city forms get restrained rain and low haze;
-- current Charge gives the Core a soft pulse;
+- Core Reserve gives the inner chest light a soft pulse;
+- Daily Charge gives the character a separate restrained outer aura;
 - an earned Shield adds a restrained protective field;
-- form changes cross-fade rather than snapping;
+- form changes cross-fade rather than snapping; a real canonical evolution also gets a brief dark/reveal + gold-ring moment;
 - no effect may invent XP or game state.
 
 A future true-3D model can replace the renderer while continuing to consume

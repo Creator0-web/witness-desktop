@@ -1,4 +1,4 @@
-"""WITNESS PySide6 visual shell — v7.54.0 Eight-Stage Progression + Character Alive V2.
+"""WITNESS PySide6 visual shell — v7.55.0 Completion Pass: Core, Safety + Onboarding.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.
@@ -10,8 +10,8 @@ import sys
 
 BASE = (os.path.dirname(sys.executable) if getattr(sys, "frozen", False)
         else os.path.dirname(os.path.abspath(__file__)))
-from profile_runtime import activate as _activate_profile
-PROFILE = _activate_profile(BASE)
+import profile_runtime
+PROFILE = profile_runtime.activate(BASE)
 for sub in ("core", "character", "shared", "_archive", "insight"):
     path = os.path.join(BASE, sub)
     if path not in sys.path:
@@ -41,6 +41,18 @@ def main():
     db.init()
     game_engine.initialize()
 
+    # Crash recovery is deliberately local and non-destructive: keep a session
+    # marker, write a traceback on uncaught Python exceptions, and let the next
+    # launch surface the existing rotating backup rather than auto-overwriting data.
+    def _witness_excepthook(exc_type, exc, tb):
+        try:
+            profile_runtime.write_crash_report(exc_type, exc, tb)
+        except Exception:
+            pass
+        sys.__excepthook__(exc_type, exc, tb)
+    sys.excepthook = _witness_excepthook
+    profile_runtime.start_session()
+
     try:
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import QApplication
@@ -53,6 +65,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("WITNESS")
     app.setOrganizationName("WITNESS")
+    app.aboutToQuit.connect(profile_runtime.end_session)
     win = WitnessMainWindow()
     if "--smoke-test" in sys.argv:
         marker = os.environ.get("WITNESS_SMOKE_MARKER", "").strip()
@@ -66,9 +79,15 @@ def main():
         # shell/backend and exits quickly without creating a distributable DB.
         win.hide()
         QTimer.singleShot(250, app.quit)
-        return app.exec()
+        try:
+            return app.exec()
+        finally:
+            profile_runtime.end_session()
     win.show()
-    return app.exec()
+    try:
+        return app.exec()
+    finally:
+        profile_runtime.end_session()
 
 
 if __name__ == "__main__":

@@ -26,7 +26,14 @@ FORBIDDEN_ROOT_SHADOWS = {
 
 FORBIDDEN_DATA = {
     "witness.db", "witness_data.json", "secrets.json", "profile.json",
-    "progression.json", "conversation.json", "ui_settings.json",
+    "import_history.json", ".pending_legacy_import.json", ".session_active.json",
+    "progression.json", "conversation.json", "xp_triggers.json", "xp_triggers_fired.json",
+    "ui_settings.json", "vision_history.json", "trail_history.json", "stats_model.json",
+    "life_data.json", "block_lock.txt",
+}
+FORBIDDEN_RUNTIME_DIRS = {
+    "recaps", "sos_videos", "video_memories", "day_breakdown_data", "insight_data",
+    "journals", "Backups", "crash_reports", ".restore_staging", ".backup_tmp",
 }
 
 
@@ -40,6 +47,9 @@ def main() -> int:
     for name in sorted(FORBIDDEN_DATA):
         if (ROOT / name).exists():
             problems.append(f"personal/runtime artifact in source root: {name}")
+    for name in sorted(FORBIDDEN_RUNTIME_DIRS):
+        if (ROOT / name).exists():
+            problems.append(f"personal/runtime directory in source root: {name}/")
 
     for p in ROOT.rglob("__pycache__"):
         if ".git" not in p.parts:

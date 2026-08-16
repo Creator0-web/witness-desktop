@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar as pycalendar
 from datetime import date, datetime
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -19,7 +20,7 @@ import game_engine
 import video_memories
 import profile_runtime
 
-from . import audio, theme
+from . import audio, onboarding, theme
 from .widgets import card, clear_layout
 from .progression import ProgressionView
 
@@ -619,6 +620,28 @@ class SettingsPage(SimplePage):
         pl.addWidget(self.profile_path_label); pl.addWidget(self.profile_pending_label); pl.addLayout(prow)
         self.layout_.addWidget(profile)
 
+        safety = card(); sl = QVBoxLayout(safety)
+        sh = QLabel("DATA SAFETY"); sh.setObjectName("SectionTitle")
+        sd = QLabel("WITNESS keeps rotating local backups of critical profile state. Full exports can also include your local media. API secrets are never included.")
+        sd.setWordWrap(True); sd.setObjectName("Secondary")
+        self.backup_status_label = QLabel(""); self.backup_status_label.setObjectName("Muted")
+        srow = QHBoxLayout()
+        backup_now = QPushButton("Create Backup Now"); backup_now.clicked.connect(self.create_backup_now)
+        export_btn = QPushButton("Export Profile"); export_btn.clicked.connect(self.export_profile)
+        restore_btn = QPushButton("Restore Backup"); restore_btn.clicked.connect(self.restore_backup)
+        backups_btn = QPushButton("Open Backups"); backups_btn.clicked.connect(self.open_backups_folder)
+        srow.addWidget(backup_now); srow.addWidget(export_btn); srow.addWidget(restore_btn); srow.addWidget(backups_btn); srow.addStretch(1)
+        sl.addWidget(sh); sl.addWidget(sd); sl.addWidget(self.backup_status_label); sl.addLayout(srow)
+        self.layout_.addWidget(safety)
+
+        getting = card(); gl = QVBoxLayout(getting)
+        gh = QLabel("GETTING STARTED"); gh.setObjectName("SectionTitle")
+        gd = QLabel("Reopen the local first-run guide without changing your existing score/history.")
+        gd.setWordWrap(True); gd.setObjectName("Secondary")
+        guide = QPushButton("Run Setup Guide"); guide.clicked.connect(self.run_onboarding)
+        gl.addWidget(gh); gl.addWidget(gd); gl.addWidget(guide, 0, Qt.AlignmentFlag.AlignLeft)
+        self.layout_.addWidget(getting)
+
         feedback = card(); fl = QVBoxLayout(feedback)
         fh = QLabel("FEEDBACK"); fh.setObjectName("SectionTitle")
         fd = QLabel("Keep WITNESS responsive while adding restrained audio feedback for scoring and milestones.")
@@ -660,6 +683,12 @@ class SettingsPage(SimplePage):
                 "IMPORT PENDING · restart WITNESS to import: " + str(pending.get("source", "")))
         else:
             self.profile_pending_label.setText("All personal history stays in this local profile folder.")
+        backup = prof.get("backup") or profile_runtime.backup_status()
+        if backup.get("latest_name"):
+            self.backup_status_label.setText(
+                f"{int(backup.get('count',0))} rotating backup(s) · latest {backup.get('latest_name')} · {backup.get('latest_at','')}")
+        else:
+            self.backup_status_label.setText("No rotating backup yet. WITNESS will create one after profile data exists.")
         self.sound_btn.setChecked(audio.enabled())
         self.sound_btn.setText("SOUND FEEDBACK · ON" if audio.enabled() else "SOUND FEEDBACK · OFF")
         self.sound_btn.setObjectName("Primary" if audio.enabled() else "")
@@ -710,6 +739,73 @@ class SettingsPage(SimplePage):
                 "will be moved into this Windows user's isolated local profile before startup.")
         except Exception as ex:
             QMessageBox.critical(self, "Import error", str(ex))
+        self.refresh()
+
+    def create_backup_now(self):
+        try:
+            out = profile_runtime.create_backup(reason="manual", force=True)
+            if out.get("created"):
+                QMessageBox.information(self, "Backup created", "Critical WITNESS profile state was backed up locally.\n\n" + str(out.get("path", "")))
+            else:
+                QMessageBox.information(self, "Backup", str(out.get("reason", "No backup was needed.")))
+        except Exception as ex:
+            QMessageBox.critical(self, "Backup error", str(ex))
+        self.refresh()
+
+    def open_backups_folder(self):
+        try:
+            profile_runtime.open_backups_folder()
+        except Exception as ex:
+            QMessageBox.critical(self, "Backups", str(ex))
+
+    def export_profile(self):
+        docs = Path.home() / "Documents"
+        start_dir = docs if docs.exists() else Path.home()
+        default = start_dir / f"WITNESS-profile-{date.today().isoformat()}.zip"
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export WITNESS Profile", str(default), "ZIP archive (*.zip)")
+        if not filename:
+            return
+        answer = QMessageBox.question(
+            self, "Export profile?",
+            "This export includes your local WITNESS profile and media, but intentionally excludes API secrets. "
+            "Large video history can make the ZIP take longer to create.\n\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            out = profile_runtime.export_profile(filename, include_media=True)
+            QMessageBox.information(self, "Profile exported", "WITNESS profile export created.\n\n" + str(out.get("path", filename)))
+        except Exception as ex:
+            QMessageBox.critical(self, "Export error", str(ex))
+
+    def restore_backup(self):
+        folder = profile_runtime.backup_status().get("folder") or str(profile_runtime.data_dir())
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Restore WITNESS Backup", str(folder), "ZIP archive (*.zip)")
+        if not filename:
+            return
+        answer = QMessageBox.question(
+            self, "Stage backup restore?",
+            "Restore is applied on the NEXT WITNESS launch before the database opens. Existing conflicting profile state will be replaced. "
+            "WITNESS will not restore API secrets from an archive.\n\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            profile_runtime.create_backup(reason="pre-restore", force=True)
+            profile_runtime.stage_backup_restore(filename)
+            QMessageBox.information(
+                self, "Restore staged",
+                "A safety backup was created and the restore is staged. Close WITNESS and open it again to apply the backup.")
+        except Exception as ex:
+            QMessageBox.critical(self, "Restore error", str(ex))
+        self.refresh()
+
+    def run_onboarding(self):
+        dlg = onboarding.OnboardingDialog(self)
+        if dlg.exec():
+            QMessageBox.information(self, "Setup saved", "Your local setup was updated. Existing XP/history was not changed.")
         self.refresh()
 
     def toggle_sound(self, checked=False):

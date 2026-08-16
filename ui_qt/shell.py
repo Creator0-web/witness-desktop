@@ -8,13 +8,14 @@ from PySide6.QtWidgets import (
     QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from . import theme
+from . import onboarding, theme
 from .arena import ArenaPage
 from .character_page import CharacterPage
 from .pages import CalendarPage, InsightsPage, RecordsPage, SettingsPage
 from .update_service import UpdateService
 from app_version import BUILD_TAG, DISPLAY_VERSION
 import update_manager
+import profile_runtime
 
 
 class WitnessMainWindow(QMainWindow):
@@ -102,6 +103,32 @@ class WitnessMainWindow(QMainWindow):
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(lambda: self.update_service.check(silent=True))
         self.update_timer.start(update_manager.channel_config()["check_hours"] * 60 * 60 * 1000)
+
+        # First-run setup is local-only and never interrupts an established account.
+        if onboarding.should_show():
+            QTimer.singleShot(650, self._show_onboarding)
+        if profile_runtime.current_profile().get("previous_unclean_shutdown"):
+            QTimer.singleShot(1100, self._show_recovery_notice)
+
+    def _show_onboarding(self):
+        dlg = onboarding.OnboardingDialog(self)
+        if dlg.exec():
+            try:
+                self.pages["arena"].refresh(include_slow=True)
+            except TypeError:
+                self.pages["arena"].refresh()
+            self.pages["settings"].refresh()
+
+    def _show_recovery_notice(self):
+        prof = profile_runtime.current_profile()
+        backup = prof.get("backup") or {}
+        latest = str(backup.get("latest_name") or "")
+        extra = f"\n\nLatest local backup: {latest}" if latest else ""
+        QMessageBox.information(
+            self, "WITNESS recovered safely",
+            "The previous WITNESS session did not close normally. Your local profile was not reset. "
+            "WITNESS created/checked a recovery backup before opening the database." + extra +
+            "\n\nUse SETTINGS → DATA SAFETY if you want to create, export, or restore a backup.")
 
     def _fade_in(self, page):
         if self._page_anim is not None:

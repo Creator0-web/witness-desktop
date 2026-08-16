@@ -33,3 +33,11 @@ video_memories/
 day_breakdown_data/
 insight_data/
 journals/
+
+# v7.55 safety/recovery runtime
+Backups/
+crash_reports/
+.restore_staging/
+.session_active.json
+release-quarantine/
+.backup_tmp/

@@ -53,6 +53,96 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-16 -- v7.55.0 Completion Pass: Core Reserve, data safety, onboarding + release quarantine
+Requested by: person approved building the remaining V1 completion ideas together after v7.54
+looked good: finish the Character payoff, add Core/Reserve + Shield separation, make behavior
+attributes more visible, keep reward sound restrained, permanently fix the repetitive release
+cleanup, add real local backup/export/restore/crash safety, add new-user onboarding, and then stop
+expanding scope so WITNESS can be used rather than endlessly rebuilt.
+
+Touched:
+- `shared/character_engine.py`: added an explicit user-controlled 14-day Core Reserve clock
+  (`SPARK / AWAKE / BUILDING / STEADY / VIBRANT`) stored in existing `game_state`. Start/Reset
+  never awards XP or changes Level, Daily Charge, unlocked forms or Protection Shield. Character
+  snapshot now exposes optional local name/mission and sorts evidence-backed Attributes
+  strongest-first with one current Signature.
+- `ui_qt/character_page.py`: separated state visually: Daily Charge now drives a restrained outer
+  green aura; Core Reserve drives the inner gold chest light. Added Core Reserve card + Start/Reset
+  confirmation, Signature display, shield-shaped field refinement and a short dark/gold-ring
+  EVOLUTION reveal only when the live canonical form actually changes. Existing art/parallax/
+  fog/rain/cross-fades remain 2.5D and presentation-only.
+- `ui_qt/assets/sounds/core.wav`, `ui_qt/audio.py`: tiny low-amplitude Core cue after explicit
+  Start/Reset only. No passive timer/Reserve/Shield event is allowed to make sound.
+- `ui_qt/onboarding.py` (new), `ui_qt/shell.py`: local-only first-run 3-step setup (optional
+  name/mission, editable starter Activities+XP, short Ghost/Level explanation). Existing accounts
+  with any previously configured Activity are not forced through it. Shell also surfaces a local
+  recovery notice after an unclean prior session.
+- `profile_runtime.py`: added transaction-consistent SQLite snapshots, up to 7 rotating compact
+  backups, 12-hour startup rate limit, forced crash-recovery backup on an unclean prior session,
+  full profile Export (including media when requested), safe staged next-launch Restore, session
+  marker, local crash reports and backup-folder helpers. Backups/exports/restores deliberately
+  exclude `secrets.json`. Restore is staged and applied before SQLite opens; it never swaps an open
+  database.
+- `qt_main.py`: installs a local uncaught-Python crash reporter and clean-session marker lifecycle
+  around the Qt event loop.
+- `ui_qt/pages.py`: Settings gained DATA SAFETY (Create Backup, Export Profile, Restore Backup,
+  Open Backups) plus a rerunnable GETTING STARTED guide. Existing Local Profile, Sound, Demo and
+  Activity controls remain.
+- `packaging/clean_repository.ps1`: fixes the repeated Windows folder-merge problem. Known runtime/
+  personal leftovers in the Git checkout are now moved by filename to
+  `%LOCALAPPDATA%\WITNESS\release-quarantine\<timestamp>` before validation instead of requiring
+  manual `Remove-Item`. Contents are never inspected; `secrets.json` is identified only by name
+  and never opened. Obsolete root code/cache cleanup remains.
+- `packaging/validate_source_tree.py`, `.gitignore`: expanded hard-fail/runtime exclusions for
+  backup, crash, restore/session and historical personal-data artifacts.
+- `app_version.py`, `qt_main.py`, `ARCHITECTURE.md`, `CHARACTER_ART.md`, `QT_BUILD.md`, `README.md`,
+  `DISTRIBUTION.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.55.0 / `2026-08-16-d`.
+
+Did NOT touch: `core/` in any way; the person did not authorize Layer 1. Every `core/*.py` hash
+remains unchanged from the v7.54 baseline. Also did NOT modify `shared/game_engine.py` or
+`shared/db.py`; canonical XP, Activity values, Ghost, records, eight-stage level thresholds, Undo
+reconciliation, demotion grace/comeback, SQLite scoring schema and updater/hash/install architecture
+are unchanged. No fitness/watch, cloud account, true 3D or fake Shield telemetry was added.
+
+What changed and why:
+The app already had a strong daily fight and visual evolution, but several product-completion
+pieces were still conceptual. v7.55 makes the four character states explicit: Level/form is
+long-term evolution; Daily Charge is today's output; Core Reserve is a separate user-defined
+current-state clock; Shield is observed protection discipline. The same pass makes personal data
+less fragile and first launch more intentional. Release cleanup now solves the exact repetitive
+manual problem observed across v7.53/v7.54 without deleting unknown files or reading secrets.
+
+Validation:
+- Full-project `compileall` passes before final cleanup; final AST/compile validation is rerun on
+  the packaged source.
+- Isolated Core test: inactive -> Start at t=1000 -> 7 days = 50%/STEADY -> Reset = 0% with reset
+  count incremented.
+- Isolated real SQLite test created a canonical Activity/XP event, created a rotating backup and
+  full export, verified both include a DB snapshot and neither contains `secrets.json`, then safely
+  staged the backup for next-launch restore.
+- Two-process crash test left a session marker intentionally; the next activation reported an
+  unclean shutdown and forced a crash-recovery backup before DB open.
+- Protected hashes: all `core/*.py` files, `shared/game_engine.py` and `shared/db.py` match the
+  v7.54 pre-pass SHA-256 baselines exactly.
+- PySide6 and PowerShell are not installed in this Linux sandbox, so actual Qt visuals/onboarding
+  and the new quarantine script must receive one real Windows acceptance test before being called
+  fully proven.
+
+Left for next session:
+Publish/tag v7.55.0 through the proven GitHub updater path. Windows acceptance should test Core
+Start/Reset + Charge-vs-Core visuals, evolution reveal/Signature, Data Safety, first-run onboarding
+(if an isolated fresh profile is practical), no random idle sound, and most importantly that
+`clean_repository.ps1` automatically quarantines the familiar stale runtime leftovers instead of
+requiring manual deletion. After that passes, freeze major feature scope and use WITNESS; fight
+only concrete bugs/friction. Full Qt Layer-1 runtime integration, Windows code signing and protected
+secret storage remain separate future engineering work.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing;
+never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes
+Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update
+NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were
+updated before ending the session.
+
 ## 2026-08-16 -- v7.54.0 eight-stage canonical ladder + Character Alive V2 + undo correction
 Requested by: person tested the v7.53 Character art build, confirmed the first five forms looked/
 worked well, noticed the old canonical app still stopped at Level 5 with old names, asked to build

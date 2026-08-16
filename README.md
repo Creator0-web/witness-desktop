@@ -1,5 +1,12 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.55.0 Completion Pass:** Character now separates Daily Charge (outer aura) from an
+> explicit user-controlled Core Reserve (inner chest glow), surfaces a strongest behavior
+> Signature, and gives real form changes a restrained evolution reveal. Settings adds rotating
+> local backups, full profile Export/next-launch Restore, crash recovery visibility, and a
+> rerunnable first-run setup guide. Release cleanup now quarantines stale runtime leftovers
+> automatically before validation. Canonical XP/Ghost/records/levels are unchanged from v7.54.
+
 > **v7.54.0 Eight-Stage Progression + Character Alive V2:** canonical rolling levels now map
 > one-for-one to Wanderer → Seeker → Apprentice → Builder → Disciplined Man → Operator → Elite →
 > Sovereign. Manual Undo immediately reconciles false/test promotions, while ordinary decay still
@@ -29,13 +36,20 @@ button with your own videos, nightly recap that rewrites tomorrow's schedule.
    still empty, recognized legacy data is migrated automatically.
 
 ## First 10 minutes in the app
-- Goals button -> "Edit lifestyle / mission" -> write YOUR words.
-- Add 3-5 goals (format: title | why | target date | stakes).
-- Money button -> put in your real numbers. The dashboard gap line and the
-  voice both use them.
-- Drop 1-3 short videos into the sos_videos folder (mp4). Best one you can
-  make: film yourself for 60 seconds telling future-you why this matters.
-- Mute button before calls. Voice off, bubbles stay.
+
+On a genuinely new local profile, the Qt app opens a short setup guide:
+
+1. Add a local name/callsign and a short mission (optional; no online account is created).
+2. Choose/edit starter **Activities + XP**. WITNESS never guesses what deserves points.
+3. Read the short Daily Fight / Weekly Campaign / Level explanation and enter the Arena.
+4. Score real actions in Arena. After one week, the same weekday becomes the same-time Ghost.
+5. Open **Character** to see Level/form, Daily Charge, Core Reserve, Shield and evidence-backed
+   Attributes. Start Core Reserve only if you want that personal timer.
+6. Open **Settings → Data Safety** any time to create a backup, export your profile, or stage a
+   backup restore for the next launch.
+
+Existing profiles with configured Activities are never forced through onboarding; Settings can
+reopen the guide manually.
 
 ## Voice quality
 Uses the free built-in Windows voice. To pick a less robotic one:
@@ -88,10 +102,11 @@ build, builds the executable with PyInstaller on Windows, wraps it with Inno Set
 publishes `WITNESS-Setup.exe` plus its SHA-256 file to GitHub Releases when a matching
 version tag is pushed. See `DISTRIBUTION.md`.
 
-Before tagging a release, run `packaging\clean_repository.ps1` (for any checkout that ever
-contained the old flat project) and `python packaging/validate_source_tree.py`. v7.52.1 also
-uses a real wait/marker frozen smoke test and clears only the old installed program directory
-on upgrade so stale Python modules cannot survive. Personal profile data is not deleted.
+Before tagging a release, run `packaging\clean_repository.ps1` and then
+`python packaging/validate_source_tree.py`. v7.55+ quarantines known stale runtime leftovers
+from a Windows folder merge to `%LOCALAPPDATA%\WITNESS\release-quarantine` automatically,
+then hard-validates the source tree. It never reads `secrets.json` and never targets the real
+active profile. The existing frozen smoke test and installed-program cleanup remain in force.
 
 The installer is not code-signed yet; broad distribution should add a trusted Windows
 code-signing certificate. Qt still does not start the complete Layer-1 runtime; packaging
@@ -112,16 +127,22 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.54.0
+### Current Qt state — v7.55.0
 
-The approved responsive Arena/History/Progression/Character structure remains intact. v7.54
-keeps the isolated local profile and proven updater while aligning the canonical rolling ladder
-with the eight approved character forms. The active form now matches the live canonical level;
-historically earned peak forms remain available as memories. The full-frame image-led 2.5D scene
-adds pointer parallax, barely perceptible breathing/camera drift, fog/haze, early fireflies, city
-rain, Core pulse, Shield field and smooth form cross-fades. The current composite art still couples
-body and world per form; independent swappable environments remain a later layered/3D asset step.
-The small Arena rank emblem opens the Character page.
+The approved responsive Arena/History/Progression/Character structure remains intact. v7.55
+keeps the eight-stage ladder and approved composite artwork, but makes the character-state model
+clearer: **Level/form** is long-term evolution, **Daily Charge** is today's output and now drives a
+restrained outer aura, **Core Reserve** is an explicit user-controlled 14-day timer driving the
+inner chest glow, and **Protection Shield** remains the monitored clean-streak projection. Real
+canonical form changes get a short evolution reveal; the strongest current evidence-backed trait
+is shown as the Signature. Composite art still couples body + world per form, so independent
+environments/360° remain a later layered/3D asset step.
+
+Settings now includes **Data Safety**: seven rotating compact backups (startup rate-limited),
+manual backup, full profile Export including media, staged next-launch Restore, crash/session
+recovery notice and local crash reports. API secrets are intentionally excluded. A local-only
+first-run guide helps a new profile define identity/mission and starter Activities without making
+a cloud account or inventing XP.
 
 The character layer does **not** change scoring. `shared/character_engine.py` only
 projects canonical game/telemetry history into visual state; `shared/game_engine.py`

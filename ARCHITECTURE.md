@@ -47,7 +47,7 @@ Visual tokens live in `ui_qt/theme.py`. Current product direction intentionally
 uses a restrained palette: charcoal neutrals, green primary, red only for
 losing/danger, gold only for records/major victories.
 
-As of **v7.54.0 / build 2026-08-16-c**, the Qt delivery layer has moved beyond a
+As of **v7.55.0 / build 2026-08-16-d**, the Qt delivery layer has moved beyond a
 one-screen preview into the character/emotional-reward phase:
 
 - `ui_qt/arena.py` is the approved visual-structure path: stronger Battle Pacer,
@@ -116,6 +116,16 @@ one-screen preview into the character/emotional-reward phase:
   keeps the 85% floor + 48h grace. The Character renderer adds gentle pointer parallax, stronger
   but restrained breathing/camera drift, fog/haze, charge-responsive Core pulse and form
   cross-fades; all remain presentation-only and run on the existing light timer.
+- v7.55 is a completion/safety pass around that proven loop. `shared/character_engine.py` now
+  exposes a user-controlled **Core Reserve** clock that is independent of XP/Level/Shield;
+  `ui_qt/character_page.py` maps Daily Charge to an outer aura and Reserve to the inner chest
+  glow, surfaces the strongest evidence-backed Attribute as a Signature, and gives actual
+  canonical form changes a restrained evolution reveal. `ui_qt/onboarding.py` provides a local
+  first-run setup guide without creating an online account or guessing XP. `profile_runtime.py`
+  adds rotating transaction-consistent backups, full export, staged next-launch restore, session
+  crash detection and crash reports. `packaging/clean_repository.ps1` quarantines known runtime
+  leftovers outside the Git checkout before hard validation so folder merges do not repeatedly
+  require manual deletion. These are downstream/product-safety features; Layer 1 remains frozen.
 - The v7.45 stylesheet explicitly makes QLabel backgrounds transparent. This
   fixed the black-rectangle/old-table look visible in the first Windows Qt
   screenshot; do not reintroduce per-label opaque backgrounds unless a specific
@@ -157,6 +167,15 @@ files can be replaced while `%LOCALAPPDATA%\WITNESS` remains untouched. Secrets 
 still stored in local `secrets.json` for now (plain text, same-user protection only);
 Windows-protected secret storage is a later hardening step.
 
+**v7.55 profile safety:** `profile_runtime.py` creates up to seven compact rotating backups under
+`Backups/` using SQLite's backup API where possible; startup backups are rate-limited to 12 hours,
+while an unclean previous session forces a recovery snapshot before `db.init()` opens SQLite.
+Settings can create a manual backup, export a full portable ZIP (including media), or safely stage
+a backup restore for the next launch. Restore never replaces an open SQLite connection and never
+imports `secrets.json`. `.session_active.json` is removed on clean exit; if it survives a crash or
+process kill, the next launch reports recovery and writes/checks a backup. `crash_reports/` stores
+uncaught Python tracebacks locally. None of these folders belong in release source.
+
 ### Windows desktop distribution / update contract (v7.52+)
 
 The source tree and the installed product now have an explicit distribution boundary.
@@ -192,10 +211,12 @@ the Windows executable.
 
 **v7.52.1 packaging invariant:** the repository root must not contain old flat duplicates
 like `db.py`, `data.py`, `config.py`, `tracker.py`, etc. Canonical modules live in the
-section folders. `packaging/validate_source_tree.py` fails a release when root shadows,
-Python caches, or personal runtime artifacts are present; `packaging/clean_repository.ps1`
-removes only known obsolete root code shadows/caches. The PyInstaller search path also keeps
-canonical section folders ahead of the project root. This exists because the first v7.52.0
+section folders. `packaging/validate_source_tree.py` fails a release when root shadows, Python caches, or personal
+runtime artifacts are present. v7.55 `packaging/clean_repository.ps1` first removes known obsolete
+root code shadows/caches and **moves known runtime/personal leftovers** from a merged checkout to
+`%LOCALAPPDATA%\WITNESS\release-quarantine\<timestamp>` (temp fallback off Windows), without
+reading contents. The validator still hard-fails if anything unsafe remains. The PyInstaller search
+path also keeps canonical section folders ahead of the project root. This exists because the first v7.52.0
 GitHub repository accidentally retained an old root `db.py`, which could be packaged instead
 of `shared/db.py` and crash at `game_engine.initialize()`.
 
@@ -421,14 +442,17 @@ state. It owns no XP rules. Current contracts:
 - **Current form** = current canonical rolling level (1–8); **unlocked memories** = historical
   peak level. Peak-rating cache is derived, not an irreversible currency, so an explicit Undo may
   lower it when corrected ledger history no longer supports the old peak.
-- **Charge** = today's exact battle XP relative to the stronger of the prior daily
-  record, Ghost's final score, or a small cold-start floor. It changes the avatar's
-  current aura/energy only; permanent evolution still comes from rolling Level.
+- **Daily Charge** = today's exact battle XP relative to the stronger of the prior daily
+  record, Ghost's final score, or a small cold-start floor. It changes a restrained outer
+  aura only; permanent evolution still comes from rolling Level.
+- **Core Reserve** = explicit 14-day Start/Reset clock in `game_state`. It is independent of
+  XP, Level, Charge, unlocked forms and Shield, and controls the inner chest light. Treat it as
+  a user-defined behavioral/visual state, not a physiological measurement.
 - **Environment unlocks** use `peak_level`, so once an environment is earned it stays
   earned after demotion. Only the selected environment ID is stored in `game_state`.
-- **Attributes** are descriptive evidence (Persistence, Discipline, Momentum,
-  Production, Focus). They never award XP and must remain explainable from recorded
-  behavior rather than AI guesses.
+- **Attributes** are descriptive evidence (Persistence, Discipline, Momentum, Production,
+  Focus). They never award XP and must remain explainable from recorded behavior rather than AI
+  guesses. The Character page sorts them strongest-first and may surface one as the Signature.
 - **Protection Shield** requires consecutive monitored days with no flagged drift,
   red-line or SOS breach. Unobserved days are never silently counted as clean. The
   first shield appears at 14 clean monitored days; longer streaks strengthen it.

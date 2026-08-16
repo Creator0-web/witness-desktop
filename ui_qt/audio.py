@@ -16,6 +16,7 @@ _FILES = {
     "record": "record.wav",
     "level": "level.wav",
     "danger": "danger.wav",
+    "core": "core.wav",
 }
 
 

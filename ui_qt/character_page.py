@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QRadialGradient
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
     QSizePolicy, QToolButton, QVBoxLayout, QWidget,
@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 
 import character_engine
 
-from . import theme
+from . import audio, theme
 from .widgets import SmoothProgressBar, card
 
 
@@ -38,9 +38,10 @@ def _pixmap(asset: str) -> QPixmap:
 class CharacterScene(QWidget):
     """Image-led 2.5D living portrait.
 
-    The approved composite artwork remains the source image. V7.54 adds only
-    presentation motion: restrained idle breathing, cursor parallax, drifting
-    atmosphere, Core pulse and cross-fades between forms. It deliberately does
+    The approved composite artwork remains the source image. V7.55 keeps the
+    restrained living-portrait motion and separates Daily Charge (outer aura)
+    from the user-controlled Core Reserve (inner chest light), while preserving
+    cross-fades between forms. It deliberately does
     not pretend the still artwork is a rotatable 3D model.
     """
 
@@ -52,7 +53,9 @@ class CharacterScene(QWidget):
         self._previous_stage = None
         self._transition = 1.0
         self.charge = 0
+        self.reserve = {"active": False, "percent": 0, "state": "UNSET"}
         self.shield = {"unlocked": False, "progress": 0, "tier": 0}
+        self._evolution_phase = -1.0
         self.zoom = 1.0
         self.pan_x = 0.0
         self.pan_y = 0.0
@@ -70,7 +73,7 @@ class CharacterScene(QWidget):
         self.setMouseTracking(True)
         self.setToolTip("Move to inspect · Drag to pan · Mouse wheel to zoom")
 
-    def set_scene(self, stage: dict, state: dict):
+    def set_scene(self, stage: dict, state: dict, *, evolution=False):
         incoming = dict(stage or character_engine.EVOLUTION_STAGES[0])
         old_asset = str(self.stage.get("asset", ""))
         new_asset = str(incoming.get("asset", ""))
@@ -79,8 +82,12 @@ class CharacterScene(QWidget):
             self._transition = 0.0
         self.stage = incoming
         self.charge = max(0, min(100, int(state.get("charge", {}).get("percent", 0) or 0)))
+        if state.get("reserve"):
+            self.reserve = dict(state["reserve"])
         if state.get("shield"):
             self.shield = dict(state["shield"])
+        if evolution:
+            self._evolution_phase = 0.0
         self.update()
 
     def _tick(self):
@@ -94,6 +101,10 @@ class CharacterScene(QWidget):
             self._transition = min(1.0, self._transition + 0.055)
             if self._transition >= 1.0:
                 self._previous_stage = None
+        if self._evolution_phase >= 0.0:
+            self._evolution_phase += 0.035
+            if self._evolution_phase >= 1.0:
+                self._evolution_phase = -1.0
         self.update()
 
     def mousePressEvent(self, event):
@@ -235,40 +246,89 @@ class CharacterScene(QWidget):
                 length = 7 + (i % 4) * 3
                 p.drawLine(QPointF(x, y), QPointF(x - 2.0, y + length))
 
-    def _draw_core(self, p: QPainter, r: QRectF):
-        # The approved art already contains the Core. This overlay only makes
-        # today's canonical Charge feel alive.
+    def _draw_charge_aura(self, p: QPainter, r: QRectF):
+        """Daily XP/Charge affects the outer energy, not the inner Reserve core."""
         pct = self.charge / 100.0
         if pct <= 0:
             return
+        pulse = (math.sin(self._phase * (1.15 + pct * 0.5)) + 1.0) * 0.5
+        cx = r.center().x()
+        cy = r.top() + r.height() * 0.50
+        radius = r.width() * (0.17 + 0.06 * pct + 0.004 * pulse)
+        grad = QRadialGradient(QPointF(cx, cy), radius)
+        inner = QColor(theme.GREEN); inner.setAlpha(int(3 + 13 * pct + pulse * 4 * pct))
+        mid = QColor(theme.GREEN); mid.setAlpha(int(2 + 7 * pct))
+        edge = QColor(theme.GREEN); edge.setAlpha(0)
+        grad.setColorAt(0.0, inner); grad.setColorAt(0.55, mid); grad.setColorAt(1.0, edge)
+        p.setPen(Qt.PenStyle.NoPen); p.setBrush(grad)
+        p.drawEllipse(QPointF(cx, cy), radius, radius * 1.9)
+
+    def _draw_core(self, p: QPainter, r: QRectF):
+        # Inner Core is now driven by the explicit Reserve clock. Daily XP has
+        # its own outer aura so a high-level person can still look depleted.
+        if not self.reserve.get("active"):
+            return
+        pct = max(0.0, min(1.0, float(self.reserve.get("percent", 0) or 0) / 100.0))
         cx = r.left() + r.width() * 0.50
         cy = r.top() + r.height() * 0.305
-        pulse = (math.sin(self._phase * (1.65 + pct * 0.9)) + 1.0) * 0.5
-        radius = 22 + 30 * pct + pulse * (3 + 4 * pct)
+        pulse = (math.sin(self._phase * (1.35 + pct * 0.45)) + 1.0) * 0.5
+        radius = 18 + 38 * pct + pulse * (2.5 + 4.5 * pct)
         grad = QRadialGradient(QPointF(cx, cy), radius)
-        hot = QColor("#efc36a"); hot.setAlpha(int(24 + 58 * pct + pulse * 18 * pct))
-        warm = QColor("#d4a84f"); warm.setAlpha(int(10 + 22 * pct))
+        hot = QColor("#f2c86b"); hot.setAlpha(int(15 + 66 * pct + pulse * 16 * max(.2, pct)))
+        warm = QColor("#d7aa4e"); warm.setAlpha(int(7 + 28 * pct))
         edge = QColor("#efc36a"); edge.setAlpha(0)
-        grad.setColorAt(0.0, hot); grad.setColorAt(0.35, warm); grad.setColorAt(1.0, edge)
+        grad.setColorAt(0.0, hot); grad.setColorAt(0.36, warm); grad.setColorAt(1.0, edge)
         p.setPen(Qt.PenStyle.NoPen); p.setBrush(grad)
         p.drawEllipse(QPointF(cx, cy), radius, radius)
+
+    def _draw_evolution(self, p: QPainter, r: QRectF):
+        if self._evolution_phase < 0.0:
+            return
+        t = max(0.0, min(1.0, self._evolution_phase))
+        # Brief darkness -> expanding ring -> clean reveal. This is intentionally
+        # rare and only runs when the live canonical level/form changes.
+        dark_alpha = int(105 * max(0.0, 1.0 - t * 2.1))
+        if dark_alpha:
+            shade = QColor("#020304"); shade.setAlpha(dark_alpha)
+            p.fillRect(r, shade)
+        cx = r.center().x(); cy = r.top() + r.height() * 0.305
+        ring_t = min(1.0, t / 0.72)
+        ring_r = 26 + ring_t * min(r.width(), r.height()) * 0.34
+        alpha = int(185 * (1.0 - ring_t) ** 1.6)
+        if alpha > 0:
+            c = QColor(theme.GOLD); c.setAlpha(alpha)
+            p.setBrush(Qt.BrushStyle.NoBrush); p.setPen(QPen(c, 2.0 + (1.0-ring_t)*2.0))
+            p.drawEllipse(QPointF(cx, cy), ring_r, ring_r)
+        if 0.18 <= t <= 0.75:
+            fade = 1.0 - abs(t - 0.46) / 0.29
+            c = QColor(theme.GOLD); c.setAlpha(int(max(0.0, fade) * 210))
+            p.setPen(c)
+            f = QFont("Segoe UI", max(12, int(r.height() * 0.026)))
+            f.setBold(True); f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.0)
+            p.setFont(f)
+            text_r = QRectF(r.left(), r.top() + r.height() * .18, r.width(), 48)
+            p.drawText(text_r, Qt.AlignmentFlag.AlignCenter, "EVOLUTION")
 
     def _draw_shield(self, p: QPainter, r: QRectF):
         if not self.shield.get("unlocked"):
             return
         tier = max(1, int(self.shield.get("tier", 1) or 1))
         pulse = (math.sin(self._phase * 1.35) + 1.0) * 0.5
-        alpha = min(90, 30 + tier * 10 + int(pulse * 14))
+        alpha = min(100, 30 + tier * 11 + int(pulse * 14))
         c = QColor(theme.GREEN); c.setAlpha(alpha)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(c, 1.35 + tier * 0.32))
-        shield_rect = QRectF(
-            r.center().x() - r.width() * 0.18,
-            r.top() + r.height() * 0.075,
-            r.width() * 0.36,
-            r.height() * 0.84,
-        )
-        p.drawEllipse(shield_rect)
+        p.setPen(QPen(c, 1.25 + tier * 0.30))
+        cx = r.center().x()
+        top = r.top() + r.height() * 0.075
+        left = cx - r.width() * 0.185
+        right = cx + r.width() * 0.185
+        shoulder_y = r.top() + r.height() * 0.19
+        waist_y = r.top() + r.height() * 0.61
+        bottom = r.top() + r.height() * 0.91
+        path = QPainterPath(QPointF(cx, top))
+        path.cubicTo(QPointF(right, shoulder_y), QPointF(right, waist_y), QPointF(cx, bottom))
+        path.cubicTo(QPointF(left, waist_y), QPointF(left, shoulder_y), QPointF(cx, top))
+        p.drawPath(path)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -276,8 +336,10 @@ class CharacterScene(QWidget):
         r = QRectF(self.rect()).adjusted(1, 1, -1, -1)
         self._draw_cover(p, r)
         self._draw_motion(p, r)
+        self._draw_charge_aura(p, r)
         self._draw_core(p, r)
         self._draw_shield(p, r)
+        self._draw_evolution(p, r)
         p.setPen(QPen(QColor(theme.BORDER_STRONG), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(r.adjusted(.5, .5, -.5, -.5), 15, 15)
@@ -319,8 +381,8 @@ class CharacterPage(QScrollArea):
         header = QHBoxLayout()
         title_box = QVBoxLayout(); title_box.setSpacing(2)
         title = QLabel("CHARACTER"); title.setObjectName("PageTitle")
-        sub = QLabel("Your long-term evolution, current charge and earned protection."); sub.setObjectName("Muted")
-        title_box.addWidget(title); title_box.addWidget(sub)
+        self.subtitle = QLabel("Your long-term evolution, current charge and earned protection."); self.subtitle.setObjectName("Muted")
+        title_box.addWidget(title); title_box.addWidget(self.subtitle)
         header.addLayout(title_box); header.addStretch(1)
         self.live_badge = QLabel("EVOLUTION LIVE")
         self.live_badge.setStyleSheet(
@@ -367,6 +429,23 @@ class CharacterPage(QScrollArea):
         il.addWidget(self.evo_bar); il.addWidget(self.evo_help); il.addWidget(self.level_lbl)
         side.addWidget(identity)
 
+        reserve = card(); rl = QVBoxLayout(reserve); rl.setContentsMargins(14, 12, 14, 12); rl.setSpacing(5)
+        re = QLabel("CORE RESERVE"); re.setObjectName("Eyebrow")
+        rr = QHBoxLayout()
+        self.reserve_state = QLabel("UNSET"); self.reserve_state.setStyleSheet(
+            f"font-size:18px;font-weight:900;color:{theme.GOLD};")
+        self.reserve_pct = QLabel("0%"); self.reserve_pct.setStyleSheet("font-size:18px;font-weight:900;")
+        rr.addWidget(self.reserve_state); rr.addStretch(1); rr.addWidget(self.reserve_pct)
+        self.reserve_time = QLabel("Not started"); self.reserve_time.setStyleSheet("font-size:15px;font-weight:800;")
+        self.reserve_bar = SmoothProgressBar(); self.reserve_bar.setRange(0, 100); self.reserve_bar.setTextVisible(False)
+        self.reserve_help = QLabel("Personal 14-day Reserve clock. It changes only the inner Core glow — never XP or Level.")
+        self.reserve_help.setWordWrap(True); self.reserve_help.setObjectName("Muted")
+        self.reserve_btn = QPushButton("START RESERVE"); self.reserve_btn.setObjectName("Gold")
+        self.reserve_btn.clicked.connect(self._reserve_action)
+        rl.addWidget(re); rl.addLayout(rr); rl.addWidget(self.reserve_time); rl.addWidget(self.reserve_bar)
+        rl.addWidget(self.reserve_help); rl.addWidget(self.reserve_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        side.addWidget(reserve)
+
         charge = card(); cl = QVBoxLayout(charge); cl.setContentsMargins(14, 12, 14, 12); cl.setSpacing(5)
         ce = QLabel("CURRENT CHARGE"); ce.setObjectName("Eyebrow")
         row = QHBoxLayout(); self.charge_state = QLabel("DORMANT"); self.charge_state.setStyleSheet(
@@ -403,6 +482,9 @@ class CharacterPage(QScrollArea):
         td = QLabel("Descriptive evidence only. Attributes never award XP.")
         td.setWordWrap(True); td.setObjectName("Muted")
         tl.addWidget(th); tl.addWidget(td)
+        self.signature_lbl = QLabel("SIGNATURE · STILL FORMING")
+        self.signature_lbl.setObjectName("Eyebrow")
+        tl.addWidget(self.signature_lbl)
         self.traits_layout = QVBoxLayout(); self.traits_layout.setSpacing(6); tl.addLayout(self.traits_layout)
         side.addWidget(traits)
         side.addStretch(1)
@@ -475,7 +557,7 @@ class CharacterPage(QScrollArea):
             self._render_scene(self._snap)
             self._rebuild_stage_strip(self._snap)
 
-    def _render_scene(self, snap):
+    def _render_scene(self, snap, *, evolution=False):
         evo = snap.get("evolution", {})
         current = dict(evo.get("current", character_engine.EVOLUTION_STAGES[0]))
         stages = evo.get("stages", [])
@@ -489,7 +571,7 @@ class CharacterPage(QScrollArea):
         self.world_lbl.setText(str(stage.get("world", "WILD PATH")).upper())
         self.world_help.setText(str(stage.get("description", "")))
         self.return_btn.setVisible(viewing_memory)
-        self.scene.set_scene(stage, snap)
+        self.scene.set_scene(stage, snap, evolution=bool(evolution and not viewing_memory))
 
     def _apply_live(self, live, full=False):
         if self._snap is None or full:
@@ -497,11 +579,22 @@ class CharacterPage(QScrollArea):
         else:
             self._snap.update({k: v for k, v in live.items() if k not in ("attributes", "shield")})
         snap = self._snap
+        identity = snap.get("identity", {})
+        name = str(identity.get("name", "") or "").strip()
+        mission = str(identity.get("mission", "") or "").strip()
+        if mission:
+            mission_short = mission if len(mission) <= 110 else mission[:107].rstrip() + "…"
+            self.subtitle.setText((name.upper() + " · " if name else "") + mission_short)
+        elif name:
+            self.subtitle.setText(name.upper() + " · long-term evolution, current state and earned protection.")
+        else:
+            self.subtitle.setText("Your long-term evolution, current state and earned protection.")
         evo = snap.get("evolution", {})
         current = evo.get("current", {})
         previous_current = getattr(self, "_current_stage_id", None)
         self._current_stage_id = str(current.get("id", "wanderer"))
-        if previous_current and previous_current != self._current_stage_id:
+        stage_changed = bool(previous_current and previous_current != self._current_stage_id)
+        if stage_changed:
             self._view_stage_id = None
 
         self.form_lbl.setText(str(current.get("name", "WANDERER")).upper())
@@ -531,7 +624,25 @@ class CharacterPage(QScrollArea):
         self.charge_meta.setText(
             f"{int(ch.get('current_xp', 0)):,} / {int(ch.get('target_xp', 1000)):,} XP today")
 
-        self._render_scene(snap)
+        reserve = snap.get("reserve", {})
+        rpct = int(reserve.get("percent", 0) or 0)
+        self.reserve_state.setText(str(reserve.get("state", "UNSET")))
+        self.reserve_pct.setText(f"{rpct}%")
+        self.reserve_bar.set_target_value(rpct)
+        self.reserve_time.setText(str(reserve.get("display", "Not started")))
+        if reserve.get("active"):
+            self.reserve_btn.setText("RESET RESERVE")
+            self.reserve_btn.setObjectName("")
+            self.reserve_help.setText(
+                f"{int(reserve.get('days',0))} days into a {int(reserve.get('target_days',14))}-day visual charge arc. "
+                "Reset only when you want this personal timer to restart.")
+        else:
+            self.reserve_btn.setText("START RESERVE")
+            self.reserve_btn.setObjectName("Gold")
+            self.reserve_help.setText("Start the personal Reserve clock when you want. It never changes XP, Level or Shield.")
+        self.reserve_btn.style().unpolish(self.reserve_btn); self.reserve_btn.style().polish(self.reserve_btn)
+
+        self._render_scene(snap, evolution=stage_changed)
 
         if full:
             self._rebuild_stage_strip(snap)
@@ -549,6 +660,10 @@ class CharacterPage(QScrollArea):
                 self.shield_help.setText("14 clean monitored days unlock the first shield.")
 
             attrs = snap.get("attributes", [])
+            sig = snap.get("signature_attribute")
+            self.signature_lbl.setText(
+                f"SIGNATURE · {str(sig.get('name','')).upper()} · {str(sig.get('tier','')).upper()}"
+                if sig else "SIGNATURE · STILL FORMING")
             while len(self._trait_rows) < len(attrs):
                 row = TraitRow(); self._trait_rows.append(row); self.traits_layout.addWidget(row)
             for i, row in enumerate(self._trait_rows):
@@ -556,6 +671,27 @@ class CharacterPage(QScrollArea):
                     row.show(); row.set_trait(attrs[i])
                 else:
                     row.hide()
+
+    def _reserve_action(self):
+        try:
+            state = character_engine.core_reserve()
+            if not state.get("active"):
+                character_engine.start_core_reserve()
+                audio.play("core")
+            else:
+                answer = QMessageBox.question(
+                    self, "Reset Core Reserve?",
+                    "This restarts the personal Core Reserve clock at zero.\n\n"
+                    "Your XP, Level, unlocked forms, Daily Charge and Protection Shield are NOT changed.\n\n"
+                    "Reset Reserve now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+                character_engine.reset_core_reserve()
+                audio.play("core")
+            self.live_refresh()
+        except Exception as ex:
+            QMessageBox.critical(self, "Core Reserve", str(ex))
 
     def refresh(self):
         try:

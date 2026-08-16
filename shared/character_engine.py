@@ -22,6 +22,9 @@ ENV_KEY = "character_environment_v1"
 
 FORM_PEAK_KEY = "character_peak_rating_v1"  # derived cache; corrected history may lower it
 FORM_RECONCILE_KEY = "character_peak_reconcile_v1"
+CORE_STARTED_KEY = "character_core_started_ts_v1"
+CORE_RESET_COUNT_KEY = "character_core_reset_count_v1"
+CORE_TARGET_DAYS = 14
 
 # Character evolution now mirrors the canonical eight-level ladder one-for-one.
 # Current form follows the current canonical level; historical peak controls which
@@ -184,6 +187,68 @@ def set_environment(environment_id: str) -> str:
         raise ValueError("That environment is still locked.")
     db.game_state_set(ENV_KEY, env)
     return env
+
+
+
+def core_reserve(now_ts=None) -> dict:
+    """User-controlled inner-reserve clock, independent of XP and Level.
+
+    WITNESS treats this as a personal discipline/energy metaphor, not a medical
+    measurement. The person explicitly starts/resets the clock. Nothing here
+    awards XP, changes Level, or modifies the Protection Shield.
+    """
+    now_ts = time.time() if now_ts is None else float(now_ts)
+    raw = str(db.game_state_get(CORE_STARTED_KEY, "") or "").strip()
+    try:
+        started = float(raw) if raw else None
+    except (TypeError, ValueError):
+        started = None
+    resets = _int_state(CORE_RESET_COUNT_KEY, 0)
+    if not started or started <= 0:
+        return {
+            "active": False, "started_ts": None, "elapsed_seconds": 0,
+            "days": 0, "hours": 0, "percent": 0, "state": "UNSET",
+            "target_days": CORE_TARGET_DAYS, "resets": resets,
+            "display": "Not started",
+        }
+    elapsed = max(0, int(now_ts - started))
+    days = elapsed // 86400
+    hours = (elapsed % 86400) // 3600
+    pct = min(100, int(round(elapsed / max(1, CORE_TARGET_DAYS * 86400) * 100)))
+    if days >= CORE_TARGET_DAYS:
+        state = "VIBRANT"
+    elif days >= 7:
+        state = "STEADY"
+    elif days >= 3:
+        state = "BUILDING"
+    elif days >= 1:
+        state = "AWAKE"
+    else:
+        state = "SPARK"
+    display = f"{days}d {hours:02d}h" if days else f"{hours}h"
+    return {
+        "active": True, "started_ts": started, "elapsed_seconds": elapsed,
+        "days": int(days), "hours": int(hours), "percent": pct, "state": state,
+        "target_days": CORE_TARGET_DAYS, "resets": resets, "display": display,
+    }
+
+
+def start_core_reserve(now_ts=None) -> dict:
+    """Start the Reserve clock if it has never been started."""
+    current = core_reserve(now_ts)
+    if current.get("active"):
+        return current
+    ts = time.time() if now_ts is None else float(now_ts)
+    db.game_state_set(CORE_STARTED_KEY, str(ts))
+    return core_reserve(ts)
+
+
+def reset_core_reserve(now_ts=None) -> dict:
+    """Explicit user reset. This never changes XP, level, charge or shield."""
+    ts = time.time() if now_ts is None else float(now_ts)
+    db.game_state_set(CORE_STARTED_KEY, str(ts))
+    db.game_state_set(CORE_RESET_COUNT_KEY, str(_int_state(CORE_RESET_COUNT_KEY, 0) + 1))
+    return core_reserve(ts)
 
 
 def _charge_from_dashboard(snap: dict) -> dict:
@@ -422,11 +487,16 @@ def live_state(now_ts=None) -> dict:
         "generated_ts": now_ts,
         "level": level,
         "charge": _charge_from_dashboard(snap),
+        "reserve": core_reserve(now_ts),
         "environment": selected_environment(level.get("peak_level", 1)),
         "environments": envs,
         "evolution": evolution_for_level(level, peak_rating),
         "demo_preview": db.game_state_get("demo_mode", "0") == "1",
         "battle": snap.get("daily_battle", {}),
+        "identity": {
+            "name": str(db.game_state_get("player_name_v1", "") or "").strip(),
+            "mission": str(db.game_state_get("player_mission_v1", "") or "").strip(),
+        },
     }
 
 
@@ -440,5 +510,8 @@ def snapshot(now_ts=None) -> dict:
     live["evolution"] = evolution_for_level(live.get("level", {}), peak_rating)
     shield = protection_shield()
     live["shield"] = shield
-    live["attributes"] = attributes(shield=shield)
+    attrs = attributes(shield=shield)
+    attrs = sorted(attrs, key=lambda row: int(row.get("value", 0) or 0), reverse=True)[:5]
+    live["attributes"] = attrs
+    live["signature_attribute"] = attrs[0] if attrs and int(attrs[0].get("value", 0) or 0) > 0 else None
     return live
