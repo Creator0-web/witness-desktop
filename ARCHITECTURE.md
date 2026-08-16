@@ -47,6 +47,21 @@ Visual tokens live in `ui_qt/theme.py`. Current product direction intentionally
 uses a restrained palette: charcoal neutrals, green primary, red only for
 losing/danger, gold only for records/major victories.
 
+**v7.56 visual-era contract:** the app may now visually mature with the canonical current Level,
+but this is strictly presentation state. `theme.era_for_level()` maps Levels 1-2 to WILD, 3-4 to
+FORGED, and 5-8 to NOIR. `ui_qt/shell.py` may read `game_engine.level_status()` to choose the QSS,
+but theme code must never write progression state or calculate its own Level. Reapplying a theme
+must not rebuild hidden pages or regress the v7.48 responsiveness rule. Semantic green/red/gold
+meaning remains stable even when surfaces, border radius and decorative accent evolve.
+
+**v7.56 3D-lab contract:** `ui_qt/character_3d.py` is an interactive software-rendered 3D
+prototype (real mesh geometry + perspective + depth sorting) embedded behind a PORTRAIT / 3D LAB
+toggle. It reads the same `shared/character_engine.py` state as the portrait and owns no gameplay
+data. The approved composite art remains the default canonical visual. The procedural mesh is not
+the production Character identity; if interaction proves valuable, replace only the rendering
+asset/layer with one rigged identity-consistent GLB/glTF character and outfit variants. Keep
+environments separate in that future asset pipeline so evolved forms can revisit earlier worlds.
+
 As of **v7.55.0 / build 2026-08-16-d**, the Qt delivery layer has moved beyond a
 one-screen preview into the character/emotional-reward phase:
 

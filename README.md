@@ -1,5 +1,12 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.56.0 Theme Evolution + Interactive 3D Lab:** the whole Qt shell now matures through
+> three visual eras tied only to the canonical current Level: WILD (1-2), FORGED (3-4), NOIR
+> (5-8). Character keeps the approved portrait art as default and adds an experimental true-geometry
+> **3D LAB** with drag rotation, zoom, idle motion, stage styling, Core glow and Charge field. The
+> procedural mesh is a performance/interaction prototype, not replacement final art. XP/Ghost/levels
+> and Layer 1 are unchanged.
+
 > **v7.55.2 Release Reliability Fix:** GitHub Actions now self-cleans the release checkout before validation/build, so stale root shadows from Windows folder merges cannot fail the release before cleanup runs. Product behavior is otherwise the v7.55 Completion Pass.
 >
 > **v7.55.0 Completion Pass:** Character now separates Daily Charge (outer aura) from an

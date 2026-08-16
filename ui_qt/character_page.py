@@ -7,13 +7,14 @@ from pathlib import Path
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
-    QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
+    QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout, QWidget,
 )
 
 import character_engine
 
 from . import audio, theme
+from .character_3d import Character3DView
 from .widgets import SmoothProgressBar, card
 
 
@@ -385,8 +386,7 @@ class CharacterPage(QScrollArea):
         title_box.addWidget(title); title_box.addWidget(self.subtitle)
         header.addLayout(title_box); header.addStretch(1)
         self.live_badge = QLabel("EVOLUTION LIVE")
-        self.live_badge.setStyleSheet(
-            f"color:{theme.GREEN};font-weight:850;border:1px solid #2d7241;border-radius:9px;padding:6px 10px;")
+        self.live_badge.setObjectName("EraBadge")
         header.addWidget(self.live_badge)
         outer.addLayout(header)
 
@@ -399,12 +399,26 @@ class CharacterPage(QScrollArea):
         self.scene_title = QLabel("WANDERER"); self.scene_title.setObjectName("SectionTitle")
         self.world_name = QLabel("WILD PATH"); self.world_name.setObjectName("Eyebrow")
         stage_top.addWidget(self.scene_mode); stage_top.addSpacing(8); stage_top.addWidget(self.scene_title)
-        stage_top.addStretch(1); stage_top.addWidget(self.world_name)
+        stage_top.addStretch(1)
+        self.view_group = QButtonGroup(self); self.view_group.setExclusive(True)
+        self.portrait_btn = QPushButton("PORTRAIT"); self.portrait_btn.setObjectName("Tab"); self.portrait_btn.setCheckable(True); self.portrait_btn.setChecked(True)
+        self.lab_btn = QPushButton("3D LAB"); self.lab_btn.setObjectName("Tab"); self.lab_btn.setCheckable(True)
+        self.view_group.addButton(self.portrait_btn, 0); self.view_group.addButton(self.lab_btn, 1)
+        self.portrait_btn.clicked.connect(lambda _=False: self._set_view_mode(0))
+        self.lab_btn.clicked.connect(lambda _=False: self._set_view_mode(1))
+        stage_top.addWidget(self.portrait_btn); stage_top.addWidget(self.lab_btn); stage_top.addSpacing(8); stage_top.addWidget(self.world_name)
         sl.addLayout(stage_top)
-        self.scene = CharacterScene(); sl.addWidget(self.scene, 1)
-        hint = QLabel("MOVE FOR DEPTH  ·  DRAG TO PAN  ·  WHEEL TO ZOOM  ·  DOUBLE-CLICK TO RESET")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter); hint.setObjectName("Muted")
-        sl.addWidget(hint)
+        self.scene_stack = QStackedWidget()
+        self.scene = CharacterScene(); self.scene3d = Character3DView()
+        self.scene_stack.addWidget(self.scene); self.scene_stack.addWidget(self.scene3d)
+        sl.addWidget(self.scene_stack, 1)
+        controls = QHBoxLayout()
+        self.scene_hint = QLabel("MOVE FOR DEPTH  ·  DRAG TO PAN  ·  WHEEL TO ZOOM  ·  DOUBLE-CLICK TO RESET")
+        self.scene_hint.setAlignment(Qt.AlignmentFlag.AlignCenter); self.scene_hint.setObjectName("Muted")
+        self.auto3d_btn = QPushButton("AUTO ROTATE"); self.auto3d_btn.setCheckable(True); self.auto3d_btn.setObjectName("Tab")
+        self.auto3d_btn.toggled.connect(self.scene3d.set_auto_rotate); self.auto3d_btn.setVisible(False)
+        controls.addWidget(self.scene_hint, 1); controls.addWidget(self.auto3d_btn)
+        sl.addLayout(controls)
 
         journey_head = QHBoxLayout()
         jtitle = QLabel("JOURNEY"); jtitle.setObjectName("Eyebrow")
@@ -492,6 +506,16 @@ class CharacterPage(QScrollArea):
         outer.addLayout(body, 1)
         self.refresh()
 
+    def _set_view_mode(self, index: int):
+        index = 1 if int(index) == 1 else 0
+        self.scene_stack.setCurrentIndex(index)
+        self.portrait_btn.setChecked(index == 0); self.lab_btn.setChecked(index == 1)
+        self.auto3d_btn.setVisible(index == 1)
+        if index == 1:
+            self.scene_hint.setText("TRUE 3D PROTOTYPE · DRAG TO ROTATE · WHEEL TO ZOOM · DOUBLE-CLICK TO RESET")
+        else:
+            self.scene_hint.setText("MOVE FOR DEPTH  ·  DRAG TO PAN  ·  WHEEL TO ZOOM  ·  DOUBLE-CLICK TO RESET")
+
     def _clear_stage_strip(self):
         while self.stage_strip.count():
             item = self.stage_strip.takeAt(0)
@@ -530,13 +554,7 @@ class CharacterPage(QScrollArea):
                 b.setChecked(True)
             if sid == self._view_stage_id:
                 b.setChecked(True)
-            b.setStyleSheet(
-                "QToolButton{background:#0d1216;color:#89949c;border:1px solid #202831;"
-                "border-radius:9px;padding:5px;font-size:9px;font-weight:750;}"
-                "QToolButton:hover{background:#12191e;color:#f1f4f6;border-color:#33414b;}"
-                f"QToolButton:checked{{color:{theme.GREEN};border-color:#2d7241;background:#102119;}}"
-                "QToolButton:disabled{color:#49545c;background:#0b0f12;border-color:#171d22;}"
-            )
+            b.setObjectName("JourneyStage")
             if can_view:
                 b.clicked.connect(lambda _=False, stage_id=sid: self._view_stage(stage_id))
             pos = int(stage.get("index", 1)) - 1
@@ -572,6 +590,7 @@ class CharacterPage(QScrollArea):
         self.world_help.setText(str(stage.get("description", "")))
         self.return_btn.setVisible(viewing_memory)
         self.scene.set_scene(stage, snap, evolution=bool(evolution and not viewing_memory))
+        self.scene3d.set_scene(stage, snap)
 
     def _apply_live(self, live, full=False):
         if self._snap is None or full:

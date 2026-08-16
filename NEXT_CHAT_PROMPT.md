@@ -14,48 +14,47 @@ anything in it unless I explicitly say so in this conversation. DEVLOG.md is the
 read every entry because older decisions still apply.
 
 CURRENT FOCUS RIGHT NOW:
-**v7.55.2 / Qt build `2026-08-16-e` — Completion Pass + Self-Cleaning Release Build** is the
-current source. v7.55.0/v7.55.1 failed GitHub Actions at the pre-build clean-source validator even
-though the tagged SHA shown by Actions (`5b3270e`) matched the GitHub Desktop commit containing the
-expected root-module deletions. Rather than keep relying on perfect local cleanup ordering, v7.55.2
-makes the ephemeral GitHub Actions checkout clean itself before packaging.
+**v7.56.0 / Qt build `2026-08-16-f` — Theme Evolution + Interactive 3D Lab** is the current
+source. The v7.55.2 self-cleaning GitHub release pipeline was proven green on Windows and the app
+updated successfully before this work began. The person then explicitly chose to keep polishing
+before Monday: make the whole app visually mature with the Character and try real 3D interaction.
 
-WHAT v7.55.2 CHANGES:
-- Product behavior remains the v7.55 Completion Pass: eight-stage progression, Character Charge/Core/
-  Shield separation, Signature, evolution reveal, local onboarding, backup/export/restore/crash safety.
-- `.github/workflows/release-windows.yml` now runs `packaging/clean_repository.ps1` immediately after
-  checkout/setup Python instead of running `validate_source_tree.py` first. The cleanup removes only
-  documented obsolete root-module shadows, moves only known runtime/personal artifact names out of the
-  ephemeral checkout, clears caches/build outputs, and then validates. PyInstaller never starts until
-  validation passes.
-- Local PowerShell cleanup before committing is still recommended for clean Git history, but release
-  correctness no longer depends on whether the user accidentally committed before running cleanup.
-- `shared/game_engine.py`, `shared/db.py` and every `core/*.py` file are intentionally unchanged from
-  v7.55.0.
+WHAT v7.56 CHANGES:
+- `ui_qt/theme.py` now has three presentation-only eras chosen from canonical current Level:
+  **WILD** for Levels 1-2, **FORGED** for 3-4, **NOIR** for 5-8. Surfaces/radii/chrome/decorative
+  accent evolve; green/red/gold semantic meanings remain stable.
+- `ui_qt/shell.py` displays the current era and switches QSS only when the broad era changes.
+  It reads `game_engine.level_status()` but never writes progression state. Hidden pages are not
+  rebuilt, preserving the v7.48 responsiveness rule.
+- Character now has **PORTRAIT | 3D LAB**. Portrait is still the approved/canonical original art.
+- `ui_qt/character_3d.py` is a dependency-free procedural true-geometry 3D prototype: drag rotates,
+  wheel zooms, double-click resets, Auto Rotate is optional, Reserve drives chest Core glow, Charge
+  drives an outer field, and stage clothing progresses toward tight tactical/tailored/Sovereign form.
+  This is intentionally a prototype mesh, not final face/art quality.
+- The future production asset contract is in `ui_qt/assets/3d/README.md`: one identity-consistent
+  rigged GLB/glTF character with outfit variants and separate environments if the prototype earns it.
+- `core/`, `shared/game_engine.py`, and `shared/db.py` are unchanged from v7.55.2.
 
 ACTUAL NEXT STEP ON WINDOWS/GITHUB:
-1. Copy the fresh v7.55.2 source over `C:\Users\morea\GitHub\witness-desktop-local`.
-2. Optional but recommended: run `powershell -ExecutionPolicy Bypass -File packaging\clean_repository.ps1`
-   locally, then review changes. The CI job now repeats this safety step itself.
-3. Commit/push the fresh source, then create/push tag exactly `v7.55.2`. Do not reuse failed v7.55.0 or
-   v7.55.1 tags.
-4. Confirm GitHub Actions passes **Clean and validate release source** and continues into dependency
-   install/PyInstaller. If it fails, capture that exact step log before making another tag.
-5. Once green, use the installed WITNESS **Update & Restart** path. Then test Core Start/Reset, Charge vs
-   Core visuals, Signature/evolution reveal, Data Safety backup/export, and unexplained idle sound.
+1. Publish/tag exactly `v7.56.0` using the already-proven self-cleaning release workflow.
+2. Let installed WITNESS use Update & Restart.
+3. Test Arena/History/Character at or previewed across Levels 1-8 and judge whether WILD/FORGED/NOIR
+   feels like one world evolving rather than three gimmicky skins.
+4. On Character, switch to 3D LAB and test rapid drag rotation, full 360-degree inspection, zoom,
+   Auto Rotate, stage switching/memories, Core pulse and Charge field. Watch for lag or paint glitches.
+5. If the interaction feels compelling but the procedural person looks too crude, **do not abandon 3D**
+   and do not replace approved Portrait art. The next step is a production rigged avatar asset/renderer.
+   If the interaction itself is not useful, keep 2.5D Portrait and remove/leave the lab experimental.
 
 KNOWN LIMITATIONS / DO NOT HIDE:
-- PySide6 installed app still does NOT start the complete Layer-1 tracker/voice/intervention runtime.
-  Shield progress therefore only advances when real telemetry exists from the full runtime. Do not
-  fake clean days.
-- Composite Character art still couples body + environment; true 360° / independent environments
-  require layered or 3D assets later.
-- `secrets.json` is profile-isolated but remains plaintext; DPAPI/Windows-protected secrets and code
-  signing are still needed before broad public distribution.
-
-After v7.55.2 passes the real Windows acceptance test, **freeze major feature scope and use WITNESS**.
-Only fix concrete bugs/friction found through real use. Do not jump into 3D, fitness, cloud accounts
-or Layer-1 rewrites simply because they are possible.
+- PySide6 is unavailable in the Linux build sandbox, so v7.56's final visual/performance acceptance
+  depends on the real Windows build. Static compile/AST/source-tree validation passes.
+- The 3D Lab mesh is a procedural interaction prototype; it does not yet reproduce the approved face
+  or cinematic clothing at production quality, and it has no skeletal animation.
+- Qt still does NOT start the complete Layer-1 tracker/voice/intervention runtime. Shield progress only
+  advances when real monitoring telemetry exists; never fake clean days.
+- `secrets.json` remains plaintext in the isolated local profile; never read/open/share it. DPAPI and
+  Windows code signing are still future distribution hardening.
 
 Before ending meaningful work: add a NEW entry at the top of DEVLOG.md (never rewrite/delete old
 entries) and update this CURRENT FOCUS section. Tell me directly that both files were updated.

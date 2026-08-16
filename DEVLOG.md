@@ -53,6 +53,33 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-16 -- v7.56.0 Theme Evolution + Interactive 3D Lab
+Requested by: person liked the new dark/modern Character direction and asked whether the entire WITNESS UI could mature with the character (jungle early, increasingly structured/modern later). They also explicitly asked to use remaining pre-Monday time to try a real interactive 3D character rather than stopping at the 2.5D composite artwork.
+
+Touched:
+- `ui_qt/theme.py`: replaced the single static visual skin with a presentation-only three-era system tied to the canonical current Level: Levels 1-2 **WILD ERA** (deep jungle blacks/moss/soft radii), Levels 3-4 **FORGED ERA** (stone-charcoal/bronze/tighter structure), Levels 5-8 **NOIR ERA** (sleek near-black/steel/quiet gold/minimal radii). Semantic green/red/gold meaning is still preserved.
+- `ui_qt/shell.py`: reads canonical `game_engine.level_status()` only to choose the visual era, shows the current era in the top bar, and reapplies QSS only when the broad era changes. Arena actions can trigger a lightweight next-turn theme sync; hidden pages are still never synchronously rebuilt.
+- `ui_qt/character_3d.py` (new): dependency-free procedural 3D humanoid prototype using actual 3D mesh geometry, perspective projection, depth sorting and user rotation rendered through QPainter. Drag rotates 360 degrees, wheel zooms, double-click resets, optional Auto Rotate animates, Core Reserve controls an actual chest-space glow, Daily Charge adds an outer field, and stage styling progresses from barefoot/wild to tight tactical/tailored/Sovereign silhouettes. This is explicitly a prototype mesh, not a claim that the approved composite art has become a final rigged 3D model.
+- `ui_qt/character_page.py`: Character now has **PORTRAIT | 3D LAB** modes. The approved original art remains the default/high-fidelity presentation; 3D Lab follows the same selected current/memory stage and state, so it can be judged inside the real app without replacing the art. Journey buttons now inherit the active era instead of hard-coding the older green card skin.
+- `ui_qt/assets/3d/README.md`: documents the production rig/GLB contract if the interactive prototype earns a real 3D asset pass later.
+- `app_version.py`, `qt_main.py`, `QT_BUILD.md`, `README.md`, `ARCHITECTURE.md`, `CHARACTER_ART.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.56.0 / `2026-08-16-f`.
+
+Did NOT touch: `core/` in any way; the person did not authorize Layer 1. Also did NOT modify `shared/game_engine.py` or `shared/db.py`; XP, Ghost, records, the 8-stage Level ladder, Undo reconciliation, Core/Shield semantics and release/update pipeline remain canonical and unchanged.
+
+What changed and why:
+The previous product had a strong cinematic Character page but the surrounding app still read as one static green productivity skin. v7.56 makes the UI itself participate in progression without turning eight levels into eight unrelated themes. The three broad eras preserve usability while making advancement visible beyond the avatar. The 3D work is deliberately isolated as an in-app lab because a polished production character requires a rigged identity-consistent asset; the procedural renderer proves interaction/performance/feel first and introduces no new graphics dependency or packaging risk.
+
+Validation:
+- full Python `compileall` passes; theme era mapping/stylesheet generation tested for all Levels 1-8; final source-tree validator passes.
+- final archive AST audit passes.
+- `core/*.py`, `shared/game_engine.py`, and `shared/db.py` hashes are unchanged from v7.55.2.
+- PySide6 is not installed in this Linux sandbox, so the definitive 3D visual/performance acceptance test is the Windows installed build.
+
+Left for next session:
+Publish/tag v7.56.0, let the proven updater install it, then judge three things on Windows before doing more: (1) whether WILD/FORGED/NOIR feels cohesive across Arena/History/Character rather than gimmicky, (2) whether 3D Lab rotation/zoom/idle stays smooth, and (3) whether the procedural mesh interaction is compelling enough to justify commissioning/generating one production rigged GLB character with outfit variants. Do **not** replace the approved portrait artwork merely because the prototype is 3D. If the lab feels crude but interaction is good, keep Portrait as default and upgrade the mesh asset later.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-16 -- v7.55.2 self-cleaning GitHub release build fix
 Requested by: person reported that both v7.55.0/v7.55.1 GitHub Actions failed at `Validate clean release source`. GitHub's checkout log showed the tagged SHA `5b3270e`, and GitHub Desktop History showed that same commit contained the expected 28 root-module deletions. Person asked whether we could make a new file and redo it, noting they may originally have committed before running PowerShell.
 

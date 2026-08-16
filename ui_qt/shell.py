@@ -16,6 +16,7 @@ from .update_service import UpdateService
 from app_version import BUILD_TAG, DISPLAY_VERSION
 import update_manager
 import profile_runtime
+import game_engine
 
 
 class WitnessMainWindow(QMainWindow):
@@ -24,6 +25,12 @@ class WitnessMainWindow(QMainWindow):
         self.setWindowTitle(f"WITNESS · {DISPLAY_VERSION} · build {BUILD_TAG}")
         self.resize(1320, 860)
         self.setMinimumSize(1080, 720)
+        try:
+            initial_level = int(game_engine.level_status().get("current_level", 1) or 1)
+        except Exception:
+            initial_level = 1
+        self._theme_tokens = theme.set_active_level(initial_level)
+        self._theme_era = str(self._theme_tokens.get("id", "wild"))
         self.setStyleSheet(theme.APP_STYLESHEET)
         self._page_anim = None
         self._available_update = None
@@ -33,28 +40,25 @@ class WitnessMainWindow(QMainWindow):
         outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(0)
 
         top = QWidget()
-        top.setStyleSheet(
-            f"background:{theme.BG_2}; border-bottom:1px solid {theme.BORDER};")
+        top.setObjectName("TopBar")
         th = QHBoxLayout(top); th.setContentsMargins(18, 9, 18, 9); th.setSpacing(8)
-        brand = QLabel("WITNESS")
-        brand.setStyleSheet("font-size:22px;font-weight:900;letter-spacing:2px;")
+        brand = QLabel("WITNESS"); brand.setObjectName("Brand")
         sub = QLabel("SELF-COMPETITION ARENA"); sub.setObjectName("Eyebrow")
-        th.addWidget(brand); th.addWidget(sub); th.addStretch(1)
+        self.era_badge = QLabel(str(self._theme_tokens.get("label", "WILD ERA")))
+        self.era_badge.setObjectName("EraBadge")
+        th.addWidget(brand); th.addWidget(sub); th.addSpacing(4); th.addWidget(self.era_badge); th.addStretch(1)
         self.update_btn = QPushButton("")
         self.update_btn.setObjectName("Primary")
         self.update_btn.setVisible(False)
         self.update_btn.clicked.connect(self._start_update)
         th.addWidget(self.update_btn)
         self.updated_badge = QLabel(f"✓ UPDATED TO {DISPLAY_VERSION}")
-        self.updated_badge.setStyleSheet(
-            f"color:{theme.GREEN};font-weight:900;padding:5px 9px;"
-            f"border:1px solid {theme.GREEN};border-radius:6px;")
+        self.updated_badge.setObjectName("UpdatedBadge")
         self.updated_badge.setVisible("/updated" in sys.argv)
         th.addWidget(self.updated_badge)
         if self.updated_badge.isVisible():
             QTimer.singleShot(12000, lambda: self.updated_badge.setVisible(False))
-        self.live = QLabel("●  LIVE")
-        self.live.setStyleSheet(f"color:{theme.GREEN};font-weight:850;")
+        self.live = QLabel("●  LIVE"); self.live.setObjectName("LiveBadge")
         th.addWidget(self.live); outer.addWidget(top)
 
         self.stack = QStackedWidget(); outer.addWidget(self.stack, 1)
@@ -72,8 +76,7 @@ class WitnessMainWindow(QMainWindow):
         self.pages["arena"].changed.connect(self._on_arena_changed)
 
         nav = QWidget()
-        nav.setStyleSheet(
-            f"background:{theme.SURFACE};border-top:1px solid {theme.BORDER};")
+        nav.setObjectName("BottomNav")
         nl = QHBoxLayout(nav); nl.setContentsMargins(18, 7, 18, 7); nl.setSpacing(8)
         group = QButtonGroup(self); group.setExclusive(True); self.nav = {}
         for key, text in (
@@ -160,6 +163,7 @@ class WitnessMainWindow(QMainWindow):
             self._fade_in(page)
 
     def refresh_current(self):
+        self._sync_theme()
         page = self.stack.currentWidget()
         # The Arena has a lightweight live-refresh path so the 2-second timer
         # never rebuilds cards, charts, insights, or hidden pages. This keeps
@@ -169,11 +173,34 @@ class WitnessMainWindow(QMainWindow):
         elif hasattr(page, "refresh"):
             page.refresh()
 
+    def _sync_theme(self, force=False):
+        """Follow the canonical current Level with a broad app-wide visual era."""
+        try:
+            level = int(game_engine.level_status().get("current_level", 1) or 1)
+        except Exception:
+            level = 1
+        incoming = theme.era_for_level(level)
+        era_id = str(incoming.get("id", "wild"))
+        if not force and era_id == getattr(self, "_theme_era", None):
+            return
+        self._theme_tokens = theme.set_active_level(level)
+        self._theme_era = str(self._theme_tokens.get("id", "wild"))
+        self.setStyleSheet(theme.APP_STYLESHEET)
+        if hasattr(self, "era_badge"):
+            self.era_badge.setText(str(self._theme_tokens.get("label", "WILD ERA")))
+        # Re-polish the current page only. Hidden pages keep their data lazy and
+        # inherit the new app stylesheet when they are next shown.
+        page = self.stack.currentWidget() if hasattr(self, "stack") else None
+        if page is not None:
+            page.style().unpolish(page); page.style().polish(page); page.update()
+
     def _on_arena_changed(self):
         # Do NOT synchronously refresh every hidden page after an Activity
         # click. Calendar/Records/Insights can be expensive to rebuild and the
         # old behavior blocked the UI thread before XP animations could paint.
-        # Each page already refreshes itself when it is opened.
+        # Each page already refreshes itself when it is opened. Theme sync is
+        # lightweight and may react immediately if an action caused evolution.
+        QTimer.singleShot(0, self._sync_theme)
         return
 
 

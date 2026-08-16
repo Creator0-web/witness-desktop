@@ -19,6 +19,22 @@ Across every form, he must still read as the same person:
   not a pasted-on superhero logo;
 - the original green sash/motif is obvious early, then becomes subtler as status rises.
 
+## v7.56 interactive 3D prototype
+
+The approved original images remain the **canonical visual art direction**. v7.56 adds a separate
+`3D LAB` on the Character page to test whether true rotation/zoom/idle state feels worth pursuing.
+The lab uses a lightweight procedural humanoid mesh and deliberately does not try to impersonate
+the final face/art quality. Portrait remains the default.
+
+The lab must preserve these stage cues: early forms barefoot and lightly equipped; Apprentice trains;
+Builder gains boots/structure; Disciplined Man enters civilization; Operator is tight/agile rather than
+bulky; Elite removes visible gear and becomes tailored; Sovereign stays athletic with a slim modern
+commanding layer. The green continuity motif shrinks with progression. Core Reserve maps to the
+chest-space glow and Daily Charge to a separate outer field.
+
+If the interaction is approved, the next 3D-art step is **one** rigged identity-consistent character
+with outfit variants, not eight unrelated people. See `ui_qt/assets/3d/README.md`.
+
 ## V1 evolution forms
 
 Character evolution is now aligned **one-for-one with the canonical rolling Level ladder**.

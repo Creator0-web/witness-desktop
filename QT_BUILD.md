@@ -1,3 +1,19 @@
+# v7.56.0 Theme Evolution + Interactive 3D Lab
+
+Current Qt build: **v7.56.0 / `2026-08-16-f`**. The app now evolves through three broad
+presentation eras from the canonical current Level: WILD (1-2), FORGED (3-4), NOIR (5-8).
+This changes QSS surfaces, geometry, decorative accent and chrome only; semantic gameplay colors
+and every scoring rule remain untouched. The top bar exposes the current era so the environmental
+progression is legible outside Character.
+
+Character keeps the approved image-led Portrait as the default mode and adds **3D LAB**, a
+dependency-free procedural 3D humanoid rendered with QPainter. The prototype uses actual mesh
+geometry/perspective/depth sorting and supports free drag rotation, wheel zoom, optional auto-rotate,
+Core Reserve chest glow, Daily Charge field and stage-specific clothing silhouettes. It exists to
+prove interaction and Windows performance before committing to a production rigged GLB asset.
+
+The complete Layer-1 tracker/voice/intervention runtime is still not started by the Qt shell.
+
 # v7.55.2 Completion Pass + Self-Cleaning Release Build
 
 Current Qt build: **v7.55.2 / `2026-08-16-e`**. This is a packaging/release reliability fix on top of the v7.55 completion pass. GitHub Actions now runs `packaging/clean_repository.ps1` itself immediately after checkout, before packaging. This means a tag can no longer fail merely because stale root shadows survived a Windows folder merge or because cleanup was run after an earlier commit. The cleanup still validates the resulting tree before PyInstaller runs.
@@ -61,7 +77,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-16-e / v7.55.2 Completion Pass + Self-Cleaning Release Build**
+Current Qt visual build: **2026-08-16-f / v7.56.0 Theme Evolution + Interactive 3D Lab**
 
 ## Desktop distribution / updater (v7.52.1)
 

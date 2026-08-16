@@ -1,4 +1,4 @@
-"""WITNESS PySide6 visual shell — v7.55.2 Completion Pass + Self-Cleaning Release Build.
+"""WITNESS PySide6 visual shell — v7.56.0 Theme Evolution + Interactive 3D Lab.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.
