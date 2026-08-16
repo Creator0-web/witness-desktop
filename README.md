@@ -1,5 +1,7 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.55.2 Release Reliability Fix:** GitHub Actions now self-cleans the release checkout before validation/build, so stale root shadows from Windows folder merges cannot fail the release before cleanup runs. Product behavior is otherwise the v7.55 Completion Pass.
+>
 > **v7.55.0 Completion Pass:** Character now separates Daily Charge (outer aura) from an
 > explicit user-controlled Core Reserve (inner chest glow), surfaces a strongest behavior
 > Signature, and gives real form changes a restrained evolution reveal. Settings adds rotating
@@ -103,7 +105,7 @@ publishes `WITNESS-Setup.exe` plus its SHA-256 file to GitHub Releases when a ma
 version tag is pushed. See `DISTRIBUTION.md`.
 
 Before tagging a release, run `packaging\clean_repository.ps1` and then
-`python packaging/validate_source_tree.py`. v7.55+ quarantines known stale runtime leftovers
+`python packaging/validate_source_tree.py`. v7.55.2+ also runs the same cleanup automatically inside GitHub Actions before validation/build. v7.55+ quarantines known stale runtime leftovers
 from a Windows folder merge to `%LOCALAPPDATA%\WITNESS\release-quarantine` automatically,
 then hard-validates the source tree. It never reads `secrets.json` and never targets the real
 active profile. The existing frozen smoke test and installed-program cleanup remain in force.
@@ -127,9 +129,9 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.55.0
+### Current Qt state — v7.55.2
 
-The approved responsive Arena/History/Progression/Character structure remains intact. v7.55
+The approved responsive Arena/History/Progression/Character structure remains intact. v7.55.2 adds a self-cleaning GitHub Actions release checkout; the v7.55
 keeps the eight-stage ladder and approved composite artwork, but makes the character-state model
 clearer: **Level/form** is long-term evolution, **Daily Charge** is today's output and now drives a
 restrained outer aura, **Core Reserve** is an explicit user-controlled 14-day timer driving the

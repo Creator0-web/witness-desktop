@@ -615,3 +615,7 @@ without an explicit product decision.
   → core/ does not get touched.
 - Want to change drift detection, escalation timing, red-line handling,
   the blocker, or anything else in core/? → say so explicitly first.
+
+## Release checkout hygiene (v7.55.2+)
+
+GitHub Actions does not trust a tagged checkout to already be clean. The Windows release job runs `packaging/clean_repository.ps1` immediately after checkout. That script removes only the documented obsolete root-module shadows, moves only known runtime/personal artifact names out of the ephemeral checkout, clears generated caches/build outputs, and then runs `packaging/validate_source_tree.py`. PyInstaller is allowed to start only after that cleaned tree validates. Local pre-commit cleanup remains preferred for repository hygiene, but build correctness no longer depends on the human running PowerShell before committing/tagging. This release layer must never inspect `secrets.json`; it may only recognize that filename and move/exclude it.

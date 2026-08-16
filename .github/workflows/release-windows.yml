@@ -22,9 +22,11 @@ jobs:
           cache: "pip"
           cache-dependency-path: packaging/requirements-desktop.txt
 
-      - name: Validate clean release source
+      - name: Clean and validate release source
         shell: pwsh
-        run: python packaging/validate_source_tree.py
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          & .\packaging\clean_repository.ps1
 
       - name: Embed update channel and validate tag
         shell: pwsh

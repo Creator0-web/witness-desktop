@@ -53,6 +53,30 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-16 -- v7.55.2 self-cleaning GitHub release build fix
+Requested by: person reported that both v7.55.0/v7.55.1 GitHub Actions failed at `Validate clean release source`. GitHub's checkout log showed the tagged SHA `5b3270e`, and GitHub Desktop History showed that same commit contained the expected 28 root-module deletions. Person asked whether we could make a new file and redo it, noting they may originally have committed before running PowerShell.
+
+Touched:
+- `.github/workflows/release-windows.yml`: replaced the pre-clean hard-fail-only validation step with a GitHub-runner cleanup + validation step. Immediately after checkout/setup Python, the Windows job now runs `packaging/clean_repository.ps1`; that script removes documented obsolete root shadows, quarantines only known runtime artifact names, clears generated caches/build output, and validates the resulting source tree before `prepare_release.py` or PyInstaller can run. This makes release correctness independent of whether local cleanup happened before or after an earlier commit.
+- `app_version.py`, `qt_main.py`, `QT_BUILD.md`, `README.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.55.2 / `2026-08-16-e` as a release reliability fix on top of the v7.55 Completion Pass.
+
+Did NOT touch: `core/` in any way; no Layer-1 authorization was given. Also did NOT modify `shared/game_engine.py`, `shared/db.py`, Character mechanics, Core/Reserve semantics, onboarding, backup/restore behavior, updater behavior, or the eight-stage progression thresholds.
+
+What changed and why:
+The failed Actions run proved that relying on the tagged repository tree being pristine was too brittle for this Windows copy/merge workflow. Although the exact reason GitHub's validator saw stale root modules despite checking out the deletion SHA was not conclusively established, the build does not need to depend on that mystery. v7.55.2 makes the ephemeral CI checkout self-cleaning using the already-audited cleanup script, then validates it. Local cleanup is still recommended to keep Git history tidy, but a mistaken commit-before-cleanup ordering can no longer block the installer build by itself.
+
+Validation:
+- `python packaging/validate_source_tree.py` passes on the packaged v7.55.2 source.
+- Full Python AST/compile validation passes.
+- Final ZIP audit confirms no forbidden personal/runtime artifacts or `secrets.json` are included.
+- Protected `core/*.py`, `shared/game_engine.py`, and `shared/db.py` are hash-identical to the v7.55.0 source used for this fix.
+- PowerShell/GitHub-hosted Windows execution cannot be run in this Linux sandbox; the definitive acceptance test is one v7.55.2 tag run on GitHub Actions.
+
+Left for next session:
+Publish the fresh v7.55.2 source, commit/push it, create/push tag exactly `v7.55.2`, and confirm Actions gets past **Clean and validate release source** into dependency install/PyInstaller. Do not reuse failed v7.55.0/v7.55.1 tags. Once green, use the installed app's Update & Restart and then perform the v7.55 Core/Signature/Data Safety acceptance test. If the CI cleanup step itself fails, capture that exact step log before making another tag.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-16 -- v7.55.0 Completion Pass: Core Reserve, data safety, onboarding + release quarantine
 Requested by: person approved building the remaining V1 completion ideas together after v7.54
 looked good: finish the Character payoff, add Core/Reserve + Shield separation, make behavior

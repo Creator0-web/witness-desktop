@@ -1,4 +1,4 @@
-"""WITNESS PySide6 visual shell — v7.55.0 Completion Pass: Core, Safety + Onboarding.
+"""WITNESS PySide6 visual shell — v7.55.2 Completion Pass + Self-Cleaning Release Build.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.

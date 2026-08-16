@@ -1,6 +1,8 @@
-# v7.55.0 Completion Pass: Core, Safety + Onboarding
+# v7.55.2 Completion Pass + Self-Cleaning Release Build
 
-Current Qt build: **v7.55.0 / `2026-08-16-d`**. This pass finishes the main V1
+Current Qt build: **v7.55.2 / `2026-08-16-e`**. This is a packaging/release reliability fix on top of the v7.55 completion pass. GitHub Actions now runs `packaging/clean_repository.ps1` itself immediately after checkout, before packaging. This means a tag can no longer fail merely because stale root shadows survived a Windows folder merge or because cleanup was run after an earlier commit. The cleanup still validates the resulting tree before PyInstaller runs.
+
+The underlying v7.55 product pass still finishes the main V1
 quality-of-life systems around the already-proven Arena/Character loop without changing
 canonical XP, Ghost, records or level math.
 
@@ -59,7 +61,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-16-d / v7.55.0 Completion Pass: Core, Safety + Onboarding**
+Current Qt visual build: **2026-08-16-e / v7.55.2 Completion Pass + Self-Cleaning Release Build**
 
 ## Desktop distribution / updater (v7.52.1)
 
