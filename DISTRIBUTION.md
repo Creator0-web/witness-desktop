@@ -40,7 +40,7 @@ For the provided same-repository flow:
 1. Put the clean WITNESS source in a GitHub repository.
 2. Commit the project, including `.github/workflows/release-windows.yml`.
 3. Ensure `app_version.VERSION` matches the release you are about to publish.
-4. Create/push tag matching `app_version.VERSION` (current hotfix: `v7.52.1`).
+4. Create/push tag matching `app_version.VERSION` (current updater-test release: `v7.52.2`).
 5. GitHub Actions builds on Windows and creates a Release containing exactly:
    `WITNESS-Setup.exe` and `WITNESS-Setup.exe.sha256`.
 6. Give new users the Setup EXE from the latest published release.
@@ -98,3 +98,15 @@ The installer and SHA-256 file land in `release\`.
 - **Full Qt runtime:** the packaged Qt app still has the v7.51 architectural
   limitation: it does not yet start the complete Layer-1 tracker/voice/
   intervention runtime. Packaging does not change that behavior.
+
+## v7.52.2 live updater proof
+
+This patch is intentionally tiny. Publish/tag `v7.52.2` while v7.52.1 remains installed.
+Do **not** manually download the v7.52.2 installer for the verification. Launch/restart v7.52.1,
+wait for its startup release check, click `UPDATE v7.52.2`, accept Update & Restart, and verify
+that WITNESS reopens as v7.52.2 with the same local profile. The updater restart passes `/updated`;
+v7.52.2 briefly renders a green `UPDATED TO v7.52.2` badge so success is visually explicit.
+
+A successful test proves: latest-release discovery, version comparison, background download,
+published SHA-256 verification, silent program-file replacement, restart, and local-profile
+preservation all work together.

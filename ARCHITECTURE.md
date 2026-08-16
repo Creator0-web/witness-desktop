@@ -47,7 +47,7 @@ Visual tokens live in `ui_qt/theme.py`. Current product direction intentionally
 uses a restrained palette: charcoal neutrals, green primary, red only for
 losing/danger, gold only for records/major victories.
 
-As of **v7.52.1 / build 2026-08-15-f**, the Qt delivery layer has moved beyond a
+As of **v7.52.2 / build 2026-08-16-a**, the Qt delivery layer has moved beyond a
 one-screen preview into the character/emotional-reward phase:
 
 - `ui_qt/arena.py` is the approved visual-structure path: stronger Battle Pacer,
@@ -153,7 +153,10 @@ schedule the Inno installer after the current app exits. `ui_qt/update_service.p
 network/download work in daemon threads and reports back by Qt signals; update I/O must not
 block the GUI thread or regress the v7.48 responsiveness contract. The shell checks shortly
 after launch and every six hours. It never auto-installs silently without the person's
-**Update & Restart** action.
+**Update & Restart** action. v7.52.2 is the first deliberate end-to-end updater proof release:
+the updater already relaunches WITNESS with `/updated`, and the Qt shell now uses that argument
+only to show a short green `UPDATED TO vX.Y.Z` confirmation badge. The flag/badge is presentation
+state only and must never be used as migration or scoring state.
 
 `.github/workflows/release-windows.yml` is the canonical release builder: a `v*` tag must
 exactly match `app_version.VERSION`; GitHub's Windows runner embeds the repository, builds

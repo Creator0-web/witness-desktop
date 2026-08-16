@@ -1,3 +1,10 @@
+# v7.52.2 updater verification
+
+Current Qt build: **v7.52.2 / `2026-08-16-a`**. This release intentionally changes almost
+nothing in the product. When the installed updater relaunches WITNESS with `/updated`, the top
+bar shows a green `UPDATED TO v7.52.2` badge for 12 seconds. Backend/game/runtime rules are
+unchanged.
+
 # WITNESS Qt build
 
 Current Qt visual build: **2026-08-15-f / v7.52.1 Desktop Packaging Hotfix**

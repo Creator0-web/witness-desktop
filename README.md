@@ -1,5 +1,10 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.52.2 updater verification:** publish this patch while v7.52.1 remains installed, then
+> use WITNESS's own `UPDATE v7.52.2` -> Update & Restart flow. A short green
+> `UPDATED TO v7.52.2` badge confirms the automatic restart reached the new build.
+
+
 New in v2: voice + speech bubbles (mutable), goal/wins/money panels, focus
 score + streaks, morning check-in, escalation ladder, deep work mode, SOS
 button with your own videos, nightly recap that rewrites tomorrow's schedule.

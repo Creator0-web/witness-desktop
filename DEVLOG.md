@@ -53,6 +53,58 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-16 -- v7.52.2 updater end-to-end verification release
+Requested by: person successfully installed the corrected v7.52.1 Windows desktop build and
+asked to prove the remaining distribution promise: future versions should be discovered and
+installed from inside WITNESS without manually downloading another installer.
+
+Touched:
+- `app_version.py`: patch version -> `7.52.2`, build tag `2026-08-16-a`, release name
+  `Updater End-to-End Test`.
+- `qt_main.py`: build/doc label updated to v7.52.2.
+- `ui_qt/shell.py`: when WITNESS is relaunched by its updater with the existing `/updated`
+  argument, the top bar briefly shows `✓ UPDATED TO v7.52.2` for 12 seconds. This is delivery
+  feedback only; it does not touch score, profile data, or runtime state. Normal direct launches
+  do not show the badge.
+- `ARCHITECTURE.md`, `DISTRIBUTION.md`, `QT_BUILD.md`, `README.md`, `NEXT_CHAT_PROMPT.md`:
+  documented the live updater verification step and expected publish/test flow.
+
+Did NOT touch: `core/`; canonical `shared/game_engine.py`; canonical `shared/db.py`; Character
+rules; Ghost/records/rolling levels; local-profile isolation; installer/updater download/hash
+logic; or Qt responsiveness architecture.
+
+What changed and why:
+v7.52.1 proved the corrected packaged app can install and launch. v7.52.2 is intentionally a
+minimal patch whose purpose is to prove the updater itself end-to-end. After GitHub publishes
+`v7.52.2`, installed v7.52.1 should discover it on the normal startup check, expose
+`UPDATE v7.52.2`, download the GitHub Release installer + SHA-256, exit, install over program
+files only, and restart with the same `%LOCALAPPDATA%\WITNESS` profile. The temporary `/updated`
+badge gives an unambiguous visual success signal after the automatic restart.
+
+Validation:
+- Source-tree release validator passes on the clean package.
+- All Python files AST-parse successfully.
+- `update_manager.is_newer("7.52.2", "7.52.1")` returns True.
+- Release preparation accepts exact tag `v7.52.2` and embeds a repository slug only in a
+  temporary test copy; checked-in/source `release_channel.json` remains blank by design.
+- No database, secrets, profile, demo history, caches, build output or personal runtime data are
+  included.
+
+Left for next session:
+Copy this source over the clean GitHub checkout, commit/push, tag exactly `v7.52.2`, wait for
+the hardened Windows Action to turn green, then leave installed v7.52.1 in place and verify the
+in-app `UPDATE v7.52.2` flow. Do NOT manually download v7.52.2 for the test. If the button does
+not appear after startup, diagnose release/latest-channel visibility before changing updater
+architecture. If download/install/restart fails, capture the exact UI error and GitHub release
+assets. If it succeeds, desktop distribution/updating can be considered proven and work can
+return to final Character/runtime/product polish.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing;
+never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes
+Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update
+NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were
+updated before ending the session.
+
 ## 2026-08-15 -- v7.52.1 Desktop Packaging Hotfix: stale-module guard + real frozen smoke test
 Requested by: person successfully published the first `v7.52.0` Windows installer through
 GitHub Actions, installed it, and immediately got an unhandled startup exception:

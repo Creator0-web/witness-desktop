@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow,
@@ -42,6 +44,14 @@ class WitnessMainWindow(QMainWindow):
         self.update_btn.setVisible(False)
         self.update_btn.clicked.connect(self._start_update)
         th.addWidget(self.update_btn)
+        self.updated_badge = QLabel(f"✓ UPDATED TO {DISPLAY_VERSION}")
+        self.updated_badge.setStyleSheet(
+            f"color:{theme.GREEN};font-weight:900;padding:5px 9px;"
+            f"border:1px solid {theme.GREEN};border-radius:6px;")
+        self.updated_badge.setVisible("/updated" in sys.argv)
+        th.addWidget(self.updated_badge)
+        if self.updated_badge.isVisible():
+            QTimer.singleShot(12000, lambda: self.updated_badge.setVisible(False))
         self.live = QLabel("●  LIVE")
         self.live.setStyleSheet(f"color:{theme.GREEN};font-weight:850;")
         th.addWidget(self.live); outer.addWidget(top)

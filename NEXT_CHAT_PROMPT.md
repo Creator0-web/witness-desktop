@@ -25,55 +25,27 @@ next session" notes at the end of entries.
 
 
 CURRENT FOCUS RIGHT NOW:
-The first real Windows/GitHub installer pipeline was successfully created and GitHub Actions
-published `v7.52.0`, but the installed EXE immediately crashed at startup with:
-`AttributeError: module 'db' has no attribute 'game_state_get'` from
-`game_engine.initialize()`. The GitHub repository screenshot showed stale pre-reorg root modules
-(e.g. root `db.py`, `data.py`, `config.py`, tracker/core duplicates) mixed into the otherwise
-new sectioned source. The old root DB predates the game-state API. The v7.52.0 Action also used
-a weak windowed-EXE smoke command that could turn green without proving the backend/shell was
-actually reached.
-
-v7.52.1 / Qt build **2026-08-15-f** is now the current source baseline: **Desktop Packaging
-Hotfix**. It is intentionally delivery-only; game/backend behavior is unchanged.
-
-What v7.52.1 adds/fixes:
-- `app_version.VERSION = 7.52.1`; next release tag is exactly `v7.52.1`.
-- `.gitignore` blocks Python caches/build outputs and known WITNESS personal/runtime data.
-- `packaging/validate_source_tree.py` makes stale root module shadows, caches, or personal
-  artifacts a HARD release failure and verifies canonical `shared/db.py` exposes required APIs.
-- `packaging/clean_repository.ps1` safely removes known obsolete root CODE duplicates and
-  caches from an old Git checkout, then runs validation. It does not delete personal data.
-- `packaging/witness.spec` puts canonical section folders before repository root during
-  PyInstaller analysis so a legacy root file cannot outrank `shared/db.py`.
-- `qt_main.py` checks the required canonical DB API and writes a smoke marker only after DB/game
-  initialization + the real `WitnessMainWindow` construction succeed.
-- GitHub/local Windows build scripts now run a real frozen test: `Start-Process`, timeout,
-  wait, exit code, AND required marker. Do not revert to a plain GUI launch + `$LASTEXITCODE`.
-- Inno Setup clears only the old program directory (`%LOCALAPPDATA%\Programs\WITNESS`) before
-  copying the new onedir build. Personal `%LOCALAPPDATA%\WITNESS` profile data is separate and
-  is never deleted by this cleanup.
-- `core/`, `shared/game_engine.py`, and `shared/db.py` were not changed.
+v7.52.2 / Qt build **2026-08-16-a** is the current source: **Updater End-to-End Test**.
+v7.52.1 has already been installed successfully on the person's Windows PC after the packaging
+hotfix. The immediate next task is NOT more feature work: prove the installed updater.
 
 ACTUAL NEXT STEP ON WINDOWS/GITHUB:
-1. Copy the contents of this v7.52.1 source into the existing local `witness-desktop` Git repo.
-2. In that repo run:
-   `powershell -ExecutionPolicy Bypass -File packaging\clean_repository.ps1`
-3. GitHub Desktop should show deletions of stale root duplicates plus the new/changed hotfix
-   files. Review that `core/` itself is NOT deleted/modified and no personal data is present.
-4. Commit/push to `main`.
-5. Create/push tag exactly `v7.52.1`.
-6. GitHub Action must pass the new source validation AND hardened frozen marker smoke test.
-7. Because installed v7.52.0 cannot start its updater, manually download/install the new
-   `WITNESS-Setup.exe` once. Verify WITNESS opens and the Local Profile/history is preserved.
-8. After that, future good releases should be tested through WITNESS's own **Update & Restart**
-   flow rather than manually reinstalling.
+1. Copy the contents of this v7.52.2 source over the clean local GitHub checkout.
+2. Run `powershell -ExecutionPolicy Bypass -File packaging\clean_repository.ps1`; it must pass.
+3. Commit/push to `main`, then create/push tag exactly `v7.52.2`.
+4. Wait for the hardened Windows Release Action to turn green and verify the Release contains
+   `WITNESS-Setup.exe` plus `WITNESS-Setup.exe.sha256`.
+5. Do NOT manually download/install v7.52.2. Leave installed v7.52.1 in place. Restart/open it,
+   wait a few seconds for the startup release check, then click `UPDATE v7.52.2` -> Update &
+   Restart.
+6. Success = WITNESS closes, updates program files, reopens with the same profile, and briefly
+   shows a green `UPDATED TO v7.52.2` badge in the top bar.
 
-Do not work around this by adding `game_state_get` to the old root DB, weakening validation,
-or touching `core/`. Remove the obsolete duplicate and keep canonical module ownership clear.
-Once v7.52.1 is proven on the person's Windows machine, return to product completion: full Qt
-runtime integration, DPAPI secret hardening, and final Character/runtime polish. Do not reopen
-scoring architecture.
+If the update button does not appear, first verify GitHub's latest stable Release is v7.52.2 and
+both assets exist. If download/install/restart errors, capture the exact WITNESS error instead of
+changing updater architecture speculatively. Once this succeeds, the manual ZIP/installer loop is
+considered solved and focus can return to Character/runtime/UI completion. Do not touch `core/`,
+reopen scoring architecture, or weaken source validation/frozen smoke testing.
 
 Security/distribution items still pending before broad public release:
 - Windows code signing / reputation,
