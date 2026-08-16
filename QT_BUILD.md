@@ -1,3 +1,16 @@
+# v7.53.0 Character Art Progression V1
+
+Current Qt build: **v7.53.0 / `2026-08-16-b`**. The dedicated Character page now uses the
+eight person-approved original character artworks: Wanderer → Seeker → Apprentice → Builder →
+Disciplined Man → Operator → Elite → Sovereign. Evolution is projected from the permanent peak
+of the existing rolling Level Rating and never changes XP/Ghost/records/game-level math.
+
+The page is image-led rather than placeholder-vector-led: large full-frame art, subtle pan/zoom,
+early-form fireflies, city rain, today's Charge pulsing the existing chest Core, Shield overlay,
+and an eight-form journey strip. Earlier earned forms can be revisited as memories. Because the
+current art is a composite of body + environment, these are stage chapters for V1 rather than
+independent swappable environments. See `CHARACTER_ART.md`.
+
 # v7.52.2 updater verification
 
 Current Qt build: **v7.52.2 / `2026-08-16-a`**. This release intentionally changes almost
@@ -7,7 +20,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-15-f / v7.52.1 Desktop Packaging Hotfix**
+Current Qt visual build: **2026-08-16-b / v7.53.0 Character Art Progression V1**
 
 ## Desktop distribution / updater (v7.52.1)
 

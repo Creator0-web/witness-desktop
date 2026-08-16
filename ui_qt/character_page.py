@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import math
-import time
+import sys
+from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea,
-    QSizePolicy, QVBoxLayout, QWidget,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
+    QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 import character_engine
@@ -16,38 +17,53 @@ from . import theme
 from .widgets import SmoothProgressBar, card
 
 
-class AvatarStage(QWidget):
-    """Interactive 2.5D character stage.
+def _asset_root() -> Path:
+    """Character art location in source and frozen PyInstaller builds."""
+    if getattr(sys, "frozen", False):
+        frozen_root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+        return frozen_root / "ui_qt" / "assets" / "character"
+    return Path(__file__).resolve().parent / "assets" / "character"
 
-    Drag horizontally to rotate, wheel to zoom. The renderer is intentionally
-    asset-free for V1 so we can prove the emotional/interaction system without
-    introducing a 3D-engine dependency. The state contract lives in
-    shared/character_engine.py and can later feed a true 3D renderer.
+
+_PIXMAP_CACHE: dict[str, QPixmap] = {}
+
+
+def _pixmap(asset: str) -> QPixmap:
+    key = str(asset or "")
+    if key not in _PIXMAP_CACHE:
+        _PIXMAP_CACHE[key] = QPixmap(str(_asset_root() / key))
+    return _PIXMAP_CACHE[key]
+
+
+class CharacterScene(QWidget):
+    """Image-led 2.5D Character scene.
+
+    The approved artwork is the hero. Dragging pans the scene, the wheel gives a
+    restrained inspect zoom, and light particles/core/shield effects make the
+    still illustration breathe without pretending it is a full 3D model.
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(500)
+        self.setMinimumHeight(600)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.environment = "training"
-        self.level = 1
+        self.stage = dict(character_engine.EVOLUTION_STAGES[0])
         self.charge = 0
         self.shield = {"unlocked": False, "progress": 0, "tier": 0}
-        self.yaw = 0.0
         self.zoom = 1.0
-        self._drag_x = None
+        self.pan_x = 0.0
+        self.pan_y = 0.0
+        self._drag = None
         self._phase = 0.0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
-        self._timer.start(50)
+        self._timer.start(55)
         self.setMouseTracking(True)
-        self.setToolTip("Drag left/right to rotate · Mouse wheel to zoom")
+        self.setToolTip("Drag to inspect · Mouse wheel to zoom")
 
-    def set_state(self, state):
-        self.environment = str(state.get("environment", self.environment))
-        level = state.get("level", {})
-        self.level = max(1, int(level.get("current_level", self.level) or self.level))
-        self.charge = max(0, min(100, int(state.get("charge", {}).get("percent", self.charge) or 0)))
+    def set_scene(self, stage: dict, state: dict):
+        self.stage = dict(stage or character_engine.EVOLUTION_STAGES[0])
+        self.charge = max(0, min(100, int(state.get("charge", {}).get("percent", 0) or 0)))
         if state.get("shield"):
             self.shield = dict(state["shield"])
         self.update()
@@ -55,270 +71,138 @@ class AvatarStage(QWidget):
     def _tick(self):
         if not self.isVisible():
             return
-        self._phase = (self._phase + 0.055) % (math.pi * 200)
+        self._phase = (self._phase + 0.04) % (math.pi * 1000)
         self.update()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_x = event.position().x()
+            self._drag = event.position()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self._drag_x is not None:
-            x = event.position().x()
-            delta = x - self._drag_x
-            self._drag_x = x
-            self.yaw = max(-78.0, min(78.0, self.yaw + delta * 0.42))
+        if self._drag is not None:
+            pos = event.position()
+            dx = pos.x() - self._drag.x()
+            dy = pos.y() - self._drag.y()
+            self._drag = pos
+            self.pan_x = max(-1.0, min(1.0, self.pan_x - dx / max(100.0, self.width() * 0.30)))
+            self.pan_y = max(-0.7, min(0.7, self.pan_y - dy / max(100.0, self.height() * 0.34)))
             self.update()
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_x = None
+            self._drag = None
+            self.unsetCursor()
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
-        step = 0.06 if event.angleDelta().y() > 0 else -0.06
-        self.zoom = max(0.82, min(1.28, self.zoom + step))
+        step = 0.045 if event.angleDelta().y() > 0 else -0.045
+        self.zoom = max(1.0, min(1.24, self.zoom + step))
         self.update()
         event.accept()
 
-    def _draw_background(self, p: QPainter, r: QRectF):
-        env = self.environment
-        if env == "winter":
-            grad = QLinearGradient(r.topLeft(), r.bottomLeft())
-            grad.setColorAt(0, QColor("#0d1720")); grad.setColorAt(1, QColor("#18242d"))
-            p.fillRect(r, QBrush(grad))
-            # distant snowbank
-            p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor("#cfd8dc"));
-            p.drawEllipse(QRectF(r.left()-80, r.bottom()-75, r.width()+160, 125))
-            for i in range(58):
-                x = r.left() + ((i * 83.0 + self._phase * (12 + i % 5)) % max(1, r.width()))
-                y = r.top() + ((i * 47.0 + self._phase * (26 + i % 7)) % max(1, r.height()))
-                a = 90 + (i % 4) * 28
-                c = QColor("#e8f0f3"); c.setAlpha(a)
-                p.setBrush(c)
-                size = 1.8 + (i % 3) * 0.8
-                p.drawEllipse(QPointF(x, y), size, size)
+    def mouseDoubleClickEvent(self, event):
+        self.zoom = 1.0
+        self.pan_x = self.pan_y = 0.0
+        self.update()
+        super().mouseDoubleClickEvent(event)
+
+    def _draw_cover(self, p: QPainter, r: QRectF):
+        pm = _pixmap(self.stage.get("asset", ""))
+        if pm.isNull():
+            p.fillRect(r, QColor(theme.SURFACE_2))
+            p.setPen(QColor(theme.TEXT_2))
+            p.drawText(r, Qt.AlignmentFlag.AlignCenter, "CHARACTER ART UNAVAILABLE")
             return
 
-        if env == "tropical":
-            grad = QLinearGradient(r.topLeft(), r.bottomLeft())
-            grad.setColorAt(0, QColor("#0b1b1a")); grad.setColorAt(1, QColor("#173027"))
-            p.fillRect(r, QBrush(grad))
-            p.setBrush(QColor("#d8b968")); p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(QPointF(r.right()-105, r.top()+90), 34, 34)
-            # water / horizon
-            p.setBrush(QColor("#173a38")); p.drawRect(QRectF(r.left(), r.bottom()-112, r.width(), 112))
-            sway = math.sin(self._phase * 0.75) * 7
-            for side in (-1, 1):
-                base_x = r.center().x() + side * (r.width() * 0.34)
-                p.setPen(QPen(QColor("#334a34"), 11, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-                p.drawLine(QPointF(base_x, r.bottom()-45), QPointF(base_x + side*16, r.top()+135))
-                p.setPen(QPen(QColor("#457352"), 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-                crown = QPointF(base_x + side*16, r.top()+135)
-                for k in range(6):
-                    ang = -2.6 + k * 0.52
-                    ex = crown.x() + math.cos(ang) * (62 + k % 2 * 13) + sway
-                    ey = crown.y() + math.sin(ang) * 40
-                    p.drawLine(crown, QPointF(ex, ey))
-            return
+        iw, ih = float(pm.width()), float(pm.height())
+        rw, rh = max(1.0, r.width()), max(1.0, r.height())
+        base_scale = max(rw / iw, rh / ih)
+        breath = 1.0 + math.sin(self._phase * 0.65) * 0.0018
+        scale = base_scale * self.zoom * breath
+        source_w = rw / scale
+        source_h = rh / scale
+        extra_x = max(0.0, iw - source_w)
+        extra_y = max(0.0, ih - source_h)
+        cx = iw / 2.0 + self.pan_x * extra_x * 0.45 + math.sin(self._phase * 0.20) * extra_x * 0.012
+        cy = ih / 2.0 + self.pan_y * extra_y * 0.38
+        sx = max(0.0, min(iw - source_w, cx - source_w / 2.0))
+        sy = max(0.0, min(ih - source_h, cy - source_h / 2.0))
+        src = QRectF(sx, sy, source_w, source_h)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.drawPixmap(r, pm, src)
 
-        if env == "desert":
-            grad = QLinearGradient(r.topLeft(), r.bottomLeft())
-            grad.setColorAt(0, QColor("#21170e")); grad.setColorAt(1, QColor("#3a2a16"))
-            p.fillRect(r, QBrush(grad))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor("#5b4424")); p.drawEllipse(QRectF(r.left()-120, r.bottom()-125, r.width()*0.9, 180))
-            p.setBrush(QColor("#73542b")); p.drawEllipse(QRectF(r.center().x()-80, r.bottom()-105, r.width()*0.8, 150))
-            for i in range(30):
-                x = r.left() + ((i * 101.0 + self._phase * (18 + i % 4)) % max(1, r.width()))
-                y = r.top()+70 + ((i * 59.0 + math.sin(self._phase+i) * 35) % max(1, r.height()-130))
-                c = QColor("#c69a56"); c.setAlpha(35 + (i % 4)*12)
-                p.setBrush(c); p.drawEllipse(QPointF(x, y), 2.2, 1.2)
-            return
-
-        if env == "city":
-            grad = QLinearGradient(r.topLeft(), r.bottomLeft())
-            grad.setColorAt(0, QColor("#080c12")); grad.setColorAt(1, QColor("#111922"))
-            p.fillRect(r, QBrush(grad))
-            p.setPen(Qt.PenStyle.NoPen)
-            x = r.left()-5
-            idx = 0
-            while x < r.right()+20:
-                w = 48 + (idx % 4)*13; h = 90 + (idx*37 % 150)
-                p.setBrush(QColor("#10171e")); p.drawRect(QRectF(x, r.bottom()-h, w, h))
-                for wy in range(int(r.bottom()-h+18), int(r.bottom()-15), 26):
-                    for wx in range(int(x+12), int(x+w-8), 22):
-                        if (wx + wy + idx) % 5:
-                            p.setBrush(QColor("#6a845e")); p.drawRect(QRectF(wx, wy, 5, 7))
-                x += w + 4; idx += 1
-            for i in range(45):
-                rx = r.left() + ((i * 71 + self._phase*70) % max(1, r.width()))
-                ry = r.top() + ((i * 97 + self._phase*155) % max(1, r.height()))
-                p.setPen(QPen(QColor(145, 165, 180, 95), 1))
-                p.drawLine(QPointF(rx, ry), QPointF(rx-5, ry+16))
-            return
-
-        # Training room: intentionally neutral so the character/charge owns attention.
-        grad = QLinearGradient(r.topLeft(), r.bottomLeft())
-        grad.setColorAt(0, QColor("#0a0f13")); grad.setColorAt(1, QColor("#10181d"))
-        p.fillRect(r, QBrush(grad))
-        p.setPen(QPen(QColor("#1e2a31"), 1))
-        horizon = r.top() + r.height()*0.62
-        p.drawLine(QPointF(r.left(), horizon), QPointF(r.right(), horizon))
-        for i in range(-7, 8):
-            bx = r.center().x() + i*54
-            p.drawLine(QPointF(r.center().x(), horizon), QPointF(bx, r.bottom()))
-        for j in range(6):
-            y = horizon + (j+1)*(r.bottom()-horizon)/6
-            p.drawLine(QPointF(r.left(), y), QPointF(r.right(), y))
-        # quiet vertical status lights
-        for side in (-1, 1):
-            x = r.center().x() + side*r.width()*0.37
-            c = QColor(theme.GREEN); c.setAlpha(60)
-            p.setPen(QPen(c, 2)); p.drawLine(QPointF(x, r.top()+100), QPointF(x, r.bottom()-60))
-
-    def _shield_polygon(self, center_x, top_y, width, height):
-        return QPolygonF([
-            QPointF(center_x, top_y),
-            QPointF(center_x + width*0.48, top_y + height*0.14),
-            QPointF(center_x + width*0.40, top_y + height*0.70),
-            QPointF(center_x, top_y + height),
-            QPointF(center_x - width*0.40, top_y + height*0.70),
-            QPointF(center_x - width*0.48, top_y + height*0.14),
-        ])
-
-    def _draw_avatar(self, p: QPainter, r: QRectF):
-        # Environment reaction: winter shiver is deliberately small; this should
-        # feel alive, not comedic.
-        shiver = math.sin(self._phase * 8.0) * 2.2 if self.environment == "winter" else 0.0
-        idle = math.sin(self._phase * 1.25) * 1.4
-        cx = r.center().x() + shiver
-        ground = r.bottom() - 45
-
-        p.save()
-        p.translate(cx, ground)
-        p.scale(self.zoom, self.zoom)
-
-        yaw_rad = math.radians(self.yaw)
-        front = 0.60 + 0.40 * abs(math.cos(yaw_rad))
-        face_shift = math.sin(yaw_rad) * 7.0
-        body_w = 88 * front
-
-        # ground shadow
+    def _draw_motion(self, p: QPainter, r: QRectF):
+        index = int(self.stage.get("index", 1) or 1)
         p.setPen(Qt.PenStyle.NoPen)
-        shadow = QColor(0, 0, 0, 105)
-        p.setBrush(shadow); p.drawEllipse(QRectF(-64, -12, 128, 24))
+        if index <= 4:
+            # Early chapters: slow fireflies / inner-world particles.
+            for i in range(26):
+                x = r.left() + ((i * 137.0 + math.sin(self._phase * 0.35 + i) * 22) % max(1.0, r.width()))
+                y = r.top() + ((i * 79.0 - self._phase * (3 + i % 3)) % max(1.0, r.height()))
+                alpha = 32 + (i % 5) * 12
+                c = QColor("#e9c36a"); c.setAlpha(alpha)
+                p.setBrush(c)
+                radius = 1.2 + (i % 3) * 0.55
+                p.drawEllipse(QPointF(x, y), radius, radius)
+        else:
+            # Civilization chapters: restrained rain, stronger on Operator+.
+            count = 20 if index == 5 else 34
+            for i in range(count):
+                x = r.left() + ((i * 113.0 + self._phase * (11 + i % 5)) % max(1.0, r.width()))
+                y = r.top() + ((i * 71.0 + self._phase * (45 + i % 7)) % max(1.0, r.height()))
+                c = QColor("#c5d1d8"); c.setAlpha(26 + (i % 4) * 9)
+                p.setPen(QPen(c, 1))
+                length = 8 + (i % 4) * 3
+                p.drawLine(QPointF(x, y), QPointF(x - 2.0, y + length))
 
-        # Charge aura reflects today's performance, not permanent level.
-        if self.charge > 0:
-            for ring_i in range(3):
-                aura = QColor(theme.GREEN)
-                alpha = int((14 + self.charge*0.42) * (1.0 - ring_i*0.22))
-                aura.setAlpha(max(8, min(80, alpha)))
-                p.setPen(QPen(aura, 1.2 + ring_i*1.0))
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                pulse = math.sin(self._phase*2 + ring_i)*3
-                pad = 15 + ring_i*13 + pulse
-                p.drawEllipse(QRectF(-body_w*0.78-pad/2, -315-pad/2,
-                                     body_w*1.56+pad, 315+pad))
+    def _draw_core(self, p: QPainter, r: QRectF):
+        # The art already contains the core. This only makes today's charge feel
+        # live; it never changes score and intentionally stays subtle.
+        pct = self.charge / 100.0
+        if pct <= 0:
+            return
+        cx = r.left() + r.width() * 0.50
+        cy = r.top() + r.height() * 0.295
+        pulse = (math.sin(self._phase * 2.2) + 1.0) * 0.5
+        radius = 24 + 34 * pct + pulse * 5
+        grad = QRadialGradient(QPointF(cx, cy), radius)
+        hot = QColor("#efc36a"); hot.setAlpha(int(36 + 62 * pct))
+        edge = QColor("#efc36a"); edge.setAlpha(0)
+        grad.setColorAt(0.0, hot); grad.setColorAt(1.0, edge)
+        p.setPen(Qt.PenStyle.NoPen); p.setBrush(grad)
+        p.drawEllipse(QPointF(cx, cy), radius, radius)
 
-        # Protection shield: faint while charging, solid after 14 clean tracked days.
-        shield_progress = int(self.shield.get("progress", 0) or 0)
-        shield_unlocked = bool(self.shield.get("unlocked"))
-        if shield_unlocked or shield_progress > 0:
-            sc = QColor(theme.GREEN if shield_unlocked else theme.GHOST)
-            sc.setAlpha(120 if shield_unlocked else int(25 + shield_progress*0.45))
-            p.setPen(QPen(sc, 2.2 if shield_unlocked else 1.2))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawPolygon(self._shield_polygon(0, -350, 180, 350))
-
-        # legs
-        limb = QColor("#496d58" if self.level < 3 else "#5e8d70")
-        p.setPen(QPen(limb, 25, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        p.drawLine(QPointF(-24*front, -135), QPointF(-28, -30))
-        p.drawLine(QPointF(24*front, -135), QPointF(28, -30))
-
-        # boots appear at Commando+
-        if self.level >= 4:
-            p.setPen(QPen(QColor("#283a31"), 31, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            p.drawLine(QPointF(-28, -43), QPointF(-31, -22))
-            p.drawLine(QPointF(28, -43), QPointF(31, -22))
-
-        # arms
-        p.setPen(QPen(limb, 23, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        arm_swing = math.sin(self._phase*1.25) * 2.5
-        p.drawLine(QPointF(-body_w*0.52, -245), QPointF(-body_w*0.70, -150+arm_swing))
-        p.drawLine(QPointF(body_w*0.52, -245), QPointF(body_w*0.70, -150-arm_swing))
-
-        # torso silhouette
-        torso = QPainterPath()
-        torso.moveTo(-body_w*0.48, -275 + idle)
-        torso.quadTo(-body_w*0.63, -225, -body_w*0.38, -135)
-        torso.lineTo(body_w*0.38, -135)
-        torso.quadTo(body_w*0.63, -225, body_w*0.48, -275 + idle)
-        torso.closeSubpath()
-        body = QColor("#538064" if self.level < 3 else "#67a07b")
-        p.setPen(Qt.PenStyle.NoPen); p.setBrush(body); p.drawPath(torso)
-
-        # rank armor grows with permanent level.
-        if self.level >= 2:
-            armor = QColor("#223c2d"); p.setBrush(armor)
-            p.drawRoundedRect(QRectF(-body_w*0.62, -276, body_w*0.35, 35), 8, 8)
-            p.drawRoundedRect(QRectF(body_w*0.27, -276, body_w*0.35, 35), 8, 8)
-        if self.level >= 3:
-            armor = QColor("#294a35"); p.setBrush(armor)
-            p.drawRoundedRect(QRectF(-body_w*0.34, -258, body_w*0.68, 92), 12, 12)
-            p.setPen(QPen(QColor(theme.GREEN), 2));
-            p.drawLine(QPointF(0, -250), QPointF(0, -178))
-        if self.level >= 4:
-            p.setPen(QPen(QColor("#2d4e39"), 29, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-            p.drawLine(QPointF(-body_w*0.68, -190), QPointF(-body_w*0.72, -154))
-            p.drawLine(QPointF(body_w*0.68, -190), QPointF(body_w*0.72, -154))
-        if self.level >= 5:
-            # Sentinel shoulder/torso energy seam.
-            seam = QColor(theme.GREEN); seam.setAlpha(180)
-            p.setPen(QPen(seam, 3))
-            p.drawLine(QPointF(-body_w*0.39, -267), QPointF(0, -225))
-            p.drawLine(QPointF(0, -225), QPointF(body_w*0.39, -267))
-
-        # neck/head
-        p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor("#6da785"))
-        p.drawRoundedRect(QRectF(-13*front, -305, 26*front, 33), 8, 8)
-        head = QRectF(-30*front + face_shift*0.15, -356 + idle, 60*front, 66)
-        p.drawEllipse(head)
-
-        # face/visor shifts with yaw, making rotation readable.
-        p.setPen(QPen(QColor("#16231b"), 3))
-        eye_y = -330 + idle
-        p.drawLine(QPointF(-8*front + face_shift, eye_y), QPointF(7*front + face_shift, eye_y))
-        if self.level >= 5:
-            visor = QColor(theme.GREEN); visor.setAlpha(190)
-            p.setPen(QPen(visor, 4))
-            p.drawLine(QPointF(-17*front + face_shift, eye_y-1), QPointF(18*front + face_shift, eye_y-1))
-
-        # winter breath
-        if self.environment == "winter":
-            for j in range(3):
-                breath = QColor("#dce8ec"); breath.setAlpha(max(0, 58-j*14))
-                p.setBrush(breath); p.setPen(Qt.PenStyle.NoPen)
-                bx = 34*front + face_shift + j*10 + (self._phase*7 % 12)
-                by = -318 - j*5
-                p.drawEllipse(QPointF(bx, by), 5+j*2, 3+j)
-
-        p.restore()
+    def _draw_shield(self, p: QPainter, r: QRectF):
+        if not self.shield.get("unlocked"):
+            return
+        tier = max(1, int(self.shield.get("tier", 1) or 1))
+        pulse = (math.sin(self._phase * 1.35) + 1.0) * 0.5
+        alpha = min(90, 34 + tier * 10 + int(pulse * 14))
+        c = QColor(theme.GREEN); c.setAlpha(alpha)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(c, 1.4 + tier * 0.35))
+        shield_rect = QRectF(
+            r.center().x() - r.width() * 0.18,
+            r.top() + r.height() * 0.075,
+            r.width() * 0.36,
+            r.height() * 0.84,
+        )
+        p.drawEllipse(shield_rect)
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         r = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-        self._draw_background(p, r)
-        # very subtle vignette border
+        self._draw_cover(p, r)
+        self._draw_motion(p, r)
+        self._draw_core(p, r)
+        self._draw_shield(p, r)
         p.setPen(QPen(QColor(theme.BORDER_STRONG), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(r.adjusted(.5, .5, -.5, -.5), 16, 16)
-        self._draw_avatar(p, r)
+        p.drawRoundedRect(r.adjusted(.5, .5, -.5, -.5), 15, 15)
 
 
 class TraitRow(QFrame):
@@ -330,7 +214,7 @@ class TraitRow(QFrame):
         self.name = QLabel("ATTRIBUTE"); self.name.setStyleSheet("font-weight:850;")
         self.tier = QLabel("FORMING"); self.tier.setObjectName("Eyebrow")
         top.addWidget(self.name); top.addStretch(1); top.addWidget(self.tier)
-        self.bar = QProgressBar(); self.bar.setRange(0,100); self.bar.setTextVisible(False)
+        self.bar = QProgressBar(); self.bar.setRange(0, 100); self.bar.setTextVisible(False)
         self.evidence = QLabel(""); self.evidence.setWordWrap(True); self.evidence.setObjectName("Muted")
         lay.addLayout(top); lay.addWidget(self.bar); lay.addWidget(self.evidence)
 
@@ -347,19 +231,21 @@ class CharacterPage(QScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._snap = None
-        self._changing_env = False
         self._trait_rows = []
+        self._stage_buttons: dict[str, QToolButton] = {}
+        self._view_stage_id = None
 
         root = QWidget(); self.setWidget(root)
-        outer = QVBoxLayout(root); outer.setContentsMargins(18,16,18,18); outer.setSpacing(12)
+        outer = QVBoxLayout(root); outer.setContentsMargins(18, 16, 18, 18); outer.setSpacing(12)
 
         header = QHBoxLayout()
         title_box = QVBoxLayout(); title_box.setSpacing(2)
         title = QLabel("CHARACTER"); title.setObjectName("PageTitle")
-        sub = QLabel("A visual record of what your behavior is turning you into."); sub.setObjectName("Muted")
+        sub = QLabel("Your long-term evolution, current charge and earned protection."); sub.setObjectName("Muted")
         title_box.addWidget(title); title_box.addWidget(sub)
         header.addLayout(title_box); header.addStretch(1)
-        self.live_badge = QLabel("LIVE STATE"); self.live_badge.setStyleSheet(
+        self.live_badge = QLabel("EVOLUTION LIVE")
+        self.live_badge.setStyleSheet(
             f"color:{theme.GREEN};font-weight:850;border:1px solid #2d7241;border-radius:9px;padding:6px 10px;")
         header.addWidget(self.live_badge)
         outer.addLayout(header)
@@ -367,60 +253,76 @@ class CharacterPage(QScrollArea):
         body = QHBoxLayout(); body.setSpacing(12)
 
         stage_card = card(strong=True)
-        sl = QVBoxLayout(stage_card); sl.setContentsMargins(12,12,12,10); sl.setSpacing(8)
+        sl = QVBoxLayout(stage_card); sl.setContentsMargins(12, 12, 12, 10); sl.setSpacing(8)
         stage_top = QHBoxLayout()
-        st = QLabel("AVATAR"); st.setObjectName("SectionTitle")
-        self.env_name = QLabel("TRAINING ROOM"); self.env_name.setObjectName("Eyebrow")
-        stage_top.addWidget(st); stage_top.addStretch(1); stage_top.addWidget(self.env_name)
+        self.scene_mode = QLabel("CURRENT FORM"); self.scene_mode.setObjectName("Eyebrow")
+        self.scene_title = QLabel("WANDERER"); self.scene_title.setObjectName("SectionTitle")
+        self.world_name = QLabel("WILD PATH"); self.world_name.setObjectName("Eyebrow")
+        stage_top.addWidget(self.scene_mode); stage_top.addSpacing(8); stage_top.addWidget(self.scene_title)
+        stage_top.addStretch(1); stage_top.addWidget(self.world_name)
         sl.addLayout(stage_top)
-        self.stage = AvatarStage(); sl.addWidget(self.stage, 1)
-        hint = QLabel("DRAG TO ROTATE  ·  WHEEL TO ZOOM  ·  LEVEL = EVOLUTION  ·  TODAY'S XP = CHARGE")
+        self.scene = CharacterScene(); sl.addWidget(self.scene, 1)
+        hint = QLabel("DRAG TO INSPECT  ·  WHEEL TO ZOOM  ·  DOUBLE-CLICK TO RESET VIEW")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter); hint.setObjectName("Muted")
         sl.addWidget(hint)
-        body.addWidget(stage_card, 7)
+
+        journey_head = QHBoxLayout()
+        jtitle = QLabel("JOURNEY"); jtitle.setObjectName("Eyebrow")
+        self.journey_help = QLabel("Earn forms with peak Level Rating. Unlocked chapters can always be revisited.")
+        self.journey_help.setObjectName("Muted")
+        journey_head.addWidget(jtitle); journey_head.addSpacing(8); journey_head.addWidget(self.journey_help); journey_head.addStretch(1)
+        sl.addLayout(journey_head)
+        self.stage_strip = QGridLayout(); self.stage_strip.setSpacing(6)
+        sl.addLayout(self.stage_strip)
+        body.addWidget(stage_card, 8)
 
         side = QVBoxLayout(); side.setSpacing(10)
 
-        identity = card(); il = QVBoxLayout(identity); il.setContentsMargins(14,12,14,12); il.setSpacing(5)
-        eye = QLabel("CURRENT FORM"); eye.setObjectName("Eyebrow")
-        self.level_lbl = QLabel("LV. 1  RECRUIT"); self.level_lbl.setStyleSheet("font-size:22px;font-weight:900;")
-        self.rating_lbl = QLabel("0 rolling XP"); self.rating_lbl.setObjectName("Secondary")
-        self.level_bar = SmoothProgressBar(); self.level_bar.setRange(0,1000); self.level_bar.setTextVisible(False)
-        il.addWidget(eye); il.addWidget(self.level_lbl); il.addWidget(self.rating_lbl); il.addWidget(self.level_bar)
+        identity = card(); il = QVBoxLayout(identity); il.setContentsMargins(14, 12, 14, 12); il.setSpacing(5)
+        eye = QLabel("EVOLUTION"); eye.setObjectName("Eyebrow")
+        self.form_lbl = QLabel("WANDERER"); self.form_lbl.setStyleSheet("font-size:22px;font-weight:900;")
+        self.form_meta = QLabel("FORM 1 / 8"); self.form_meta.setObjectName("Secondary")
+        self.evo_bar = SmoothProgressBar(); self.evo_bar.setRange(0, 1000); self.evo_bar.setTextVisible(False)
+        self.evo_help = QLabel(""); self.evo_help.setWordWrap(True); self.evo_help.setObjectName("Muted")
+        self.level_lbl = QLabel("LV. 1 RECRUIT · 0 rolling XP"); self.level_lbl.setObjectName("Secondary")
+        il.addWidget(eye); il.addWidget(self.form_lbl); il.addWidget(self.form_meta)
+        il.addWidget(self.evo_bar); il.addWidget(self.evo_help); il.addWidget(self.level_lbl)
         side.addWidget(identity)
 
-        charge = card(); cl = QVBoxLayout(charge); cl.setContentsMargins(14,12,14,12); cl.setSpacing(5)
+        charge = card(); cl = QVBoxLayout(charge); cl.setContentsMargins(14, 12, 14, 12); cl.setSpacing(5)
         ce = QLabel("CURRENT CHARGE"); ce.setObjectName("Eyebrow")
         row = QHBoxLayout(); self.charge_state = QLabel("DORMANT"); self.charge_state.setStyleSheet(
             f"font-size:18px;font-weight:900;color:{theme.GREEN};")
         self.charge_pct = QLabel("0%"); self.charge_pct.setStyleSheet("font-size:18px;font-weight:900;")
         row.addWidget(self.charge_state); row.addStretch(1); row.addWidget(self.charge_pct)
-        self.charge_bar = SmoothProgressBar(); self.charge_bar.setRange(0,100); self.charge_bar.setTextVisible(False)
+        self.charge_bar = SmoothProgressBar(); self.charge_bar.setRange(0, 100); self.charge_bar.setTextVisible(False)
         self.charge_meta = QLabel("0 / 1,000 XP"); self.charge_meta.setObjectName("Muted")
         cl.addWidget(ce); cl.addLayout(row); cl.addWidget(self.charge_bar); cl.addWidget(self.charge_meta)
         side.addWidget(charge)
 
-        env = card(); el = QVBoxLayout(env); el.setContentsMargins(14,12,14,12); el.setSpacing(6)
-        ee = QLabel("ENVIRONMENT"); ee.setObjectName("Eyebrow")
-        self.env_combo = QComboBox(); self.env_combo.currentIndexChanged.connect(self._environment_changed)
-        self.env_help = QLabel(""); self.env_help.setWordWrap(True); self.env_help.setObjectName("Muted")
-        el.addWidget(ee); el.addWidget(self.env_combo); el.addWidget(self.env_help)
-        side.addWidget(env)
+        world = card(); wl = QVBoxLayout(world); wl.setContentsMargins(14, 12, 14, 12); wl.setSpacing(5)
+        we = QLabel("CURRENT WORLD"); we.setObjectName("Eyebrow")
+        self.world_lbl = QLabel("WILD PATH"); self.world_lbl.setStyleSheet("font-weight:850;")
+        self.world_help = QLabel("The journey begins in the wild."); self.world_help.setWordWrap(True); self.world_help.setObjectName("Muted")
+        self.return_btn = QPushButton("RETURN TO CURRENT FORM"); self.return_btn.setObjectName("Primary")
+        self.return_btn.clicked.connect(self._return_current); self.return_btn.setVisible(False)
+        wl.addWidget(we); wl.addWidget(self.world_lbl); wl.addWidget(self.world_help); wl.addWidget(self.return_btn)
+        side.addWidget(world)
 
-        shield = card(); sh = QVBoxLayout(shield); sh.setContentsMargins(14,12,14,12); sh.setSpacing(5)
+        shield = card(); sh = QVBoxLayout(shield); sh.setContentsMargins(14, 12, 14, 12); sh.setSpacing(5)
         se = QLabel("PROTECTION SHIELD"); se.setObjectName("Eyebrow")
         srow = QHBoxLayout(); self.shield_name = QLabel("SHIELD CHARGING"); self.shield_name.setStyleSheet("font-weight:850;")
         self.shield_days = QLabel("0 / 14 DAYS"); self.shield_days.setObjectName("Secondary")
         srow.addWidget(self.shield_name); srow.addStretch(1); srow.addWidget(self.shield_days)
-        self.shield_bar = QProgressBar(); self.shield_bar.setRange(0,100); self.shield_bar.setTextVisible(False)
+        self.shield_bar = QProgressBar(); self.shield_bar.setRange(0, 100); self.shield_bar.setTextVisible(False)
         self.shield_help = QLabel("Requires monitored days with no drift, red-line or SOS breaches.")
         self.shield_help.setWordWrap(True); self.shield_help.setObjectName("Muted")
         sh.addWidget(se); sh.addLayout(srow); sh.addWidget(self.shield_bar); sh.addWidget(self.shield_help)
         side.addWidget(shield)
 
-        traits = card(); tl = QVBoxLayout(traits); tl.setContentsMargins(12,11,12,12); tl.setSpacing(7)
+        traits = card(); tl = QVBoxLayout(traits); tl.setContentsMargins(12, 11, 12, 12); tl.setSpacing(7)
         th = QLabel("ATTRIBUTES"); th.setObjectName("SectionTitle")
-        td = QLabel("These do not award XP. They reflect behavior WITNESS has actually observed.")
+        td = QLabel("Descriptive evidence only. Attributes never award XP.")
         td.setWordWrap(True); td.setObjectName("Muted")
         tl.addWidget(th); tl.addWidget(td)
         self.traits_layout = QVBoxLayout(); self.traits_layout.setSpacing(6); tl.addLayout(self.traits_layout)
@@ -430,81 +332,138 @@ class CharacterPage(QScrollArea):
         outer.addLayout(body, 1)
         self.refresh()
 
-    def _rebuild_environments(self, snap):
-        current = str(snap.get("environment", "training"))
-        envs = snap.get("environments", [])
-        self._changing_env = True
-        self.env_combo.clear()
-        current_idx = 0
-        for i, e in enumerate(envs):
-            text = e["name"] if e.get("unlocked") else f"{e['name']}  ·  LOCKED AT LV.{e['unlock_level']}"
-            self.env_combo.addItem(text, e["id"])
-            if e["id"] == current:
-                current_idx = i
-        self.env_combo.setCurrentIndex(current_idx)
-        self._changing_env = False
-        active = next((e for e in envs if e["id"] == current), None)
-        self.env_help.setText(active.get("description", "") if active else "")
+    def _clear_stage_strip(self):
+        while self.stage_strip.count():
+            item = self.stage_strip.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self._stage_buttons.clear()
 
-    def _environment_changed(self, index):
-        if self._changing_env or index < 0:
-            return
-        env_id = self.env_combo.itemData(index)
-        envs = (self._snap or {}).get("environments", [])
-        row = next((e for e in envs if e.get("id") == env_id), None)
-        if row and not row.get("unlocked"):
-            self.env_help.setText(f"Unlocks at Level {row['unlock_level']}. Keep climbing.")
-            self._rebuild_environments(self._snap or {})
-            return
-        try:
-            character_engine.set_environment(env_id)
-        except Exception as ex:
-            self.env_help.setText(str(ex)); self._rebuild_environments(self._snap or {}); return
-        self.refresh()
+    def _rebuild_stage_strip(self, snap):
+        self._clear_stage_strip()
+        evo = snap.get("evolution", {})
+        current_id = str(evo.get("current", {}).get("id", "wanderer"))
+        demo_preview = bool(snap.get("demo_preview"))
+        for stage in evo.get("stages", []):
+            stage = dict(stage)
+            sid = str(stage.get("id"))
+            unlocked = bool(stage.get("unlocked"))
+            can_view = unlocked or demo_preview
+            b = QToolButton()
+            b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            b.setCheckable(True)
+            b.setAutoExclusive(True)
+            b.setFixedHeight(86)
+            b.setMinimumWidth(118)
+            if can_view:
+                pm = _pixmap(stage.get("asset", ""))
+                if not pm.isNull():
+                    b.setIcon(QIcon(pm))
+                    b.setIconSize(QSize(66, 38))
+            prefix = f"{int(stage.get('index', 1))}. "
+            b.setText(prefix + str(stage.get("name", "FORM")).upper())
+            if not can_view:
+                b.setText("LOCKED\n" + prefix + str(stage.get("name", "FORM")).upper())
+                b.setEnabled(False)
+            if sid == current_id and self._view_stage_id is None:
+                b.setChecked(True)
+            if sid == self._view_stage_id:
+                b.setChecked(True)
+            b.setStyleSheet(
+                "QToolButton{background:#0d1216;color:#89949c;border:1px solid #202831;"
+                "border-radius:9px;padding:5px;font-size:9px;font-weight:750;}"
+                "QToolButton:hover{background:#12191e;color:#f1f4f6;border-color:#33414b;}"
+                f"QToolButton:checked{{color:{theme.GREEN};border-color:#2d7241;background:#102119;}}"
+                "QToolButton:disabled{color:#49545c;background:#0b0f12;border-color:#171d22;}"
+            )
+            if can_view:
+                b.clicked.connect(lambda _=False, stage_id=sid: self._view_stage(stage_id))
+            pos = int(stage.get("index", 1)) - 1
+            self.stage_strip.addWidget(b, pos // 4, pos % 4)
+            self._stage_buttons[sid] = b
+
+    def _view_stage(self, stage_id: str):
+        snap = self._snap or {}
+        evo = snap.get("evolution", {})
+        current_id = str(evo.get("current", {}).get("id", "wanderer"))
+        self._view_stage_id = None if stage_id == current_id else stage_id
+        self._render_scene(snap)
+        self._rebuild_stage_strip(snap)
+
+    def _return_current(self):
+        self._view_stage_id = None
+        if self._snap:
+            self._render_scene(self._snap)
+            self._rebuild_stage_strip(self._snap)
+
+    def _render_scene(self, snap):
+        evo = snap.get("evolution", {})
+        current = dict(evo.get("current", character_engine.EVOLUTION_STAGES[0]))
+        stages = evo.get("stages", [])
+        stage = current
+        if self._view_stage_id:
+            stage = dict(next((x for x in stages if x.get("id") == self._view_stage_id), current))
+        viewing_memory = str(stage.get("id")) != str(current.get("id"))
+        self.scene_mode.setText("MEMORY" if viewing_memory else "CURRENT FORM")
+        self.scene_title.setText(str(stage.get("name", "WANDERER")).upper())
+        self.world_name.setText(str(stage.get("world", "WILD PATH")).upper())
+        self.world_lbl.setText(str(stage.get("world", "WILD PATH")).upper())
+        self.world_help.setText(str(stage.get("description", "")))
+        self.return_btn.setVisible(viewing_memory)
+        self.scene.set_scene(stage, snap)
 
     def _apply_live(self, live, full=False):
-        if self._snap is None:
-            self._snap = dict(live)
-        elif full:
+        if self._snap is None or full:
             self._snap = dict(live)
         else:
-            # preserve slow traits/shield while updating live level/charge/env
-            self._snap.update({k:v for k,v in live.items() if k not in ("attributes","shield")})
+            self._snap.update({k: v for k, v in live.items() if k not in ("attributes", "shield")})
         snap = self._snap
-        level = snap.get("level", {})
-        self.level_lbl.setText(f"LV. {level.get('current_level',1)}  {str(level.get('name','Recruit')).upper()}")
-        rating = int(level.get("rating", 0) or 0)
-        nxt = level.get("next_threshold")
-        if nxt:
-            start = int(level.get("entry_threshold",0) or 0); end = int(nxt or 1)
-            frac = (rating-start)/max(1,end-start)
-            self.level_bar.set_target_value(max(0,min(1000,int(frac*1000))))
-            self.rating_lbl.setText(f"{rating:,} rolling XP · {max(0,int(level.get('xp_to_next',0))):,} to next form")
+        evo = snap.get("evolution", {})
+        current = evo.get("current", {})
+        previous_current = getattr(self, "_current_stage_id", None)
+        self._current_stage_id = str(current.get("id", "wanderer"))
+        if previous_current and previous_current != self._current_stage_id:
+            self._view_stage_id = None
+
+        self.form_lbl.setText(str(current.get("name", "WANDERER")).upper())
+        self.form_meta.setText(
+            f"FORM {int(evo.get('index', 1))} / {int(evo.get('count', 8))}  ·  {str(current.get('theme', 'RAW POTENTIAL'))}")
+        progress = max(0.0, min(1.0, float(evo.get("progress", 0.0) or 0.0)))
+        self.evo_bar.set_target_value(int(progress * 1000))
+        peak_rating = int(evo.get("peak_rating", 0) or 0)
+        next_stage = evo.get("next")
+        if next_stage:
+            self.evo_help.setText(
+                f"Peak Level Rating {peak_rating:,} · {int(evo.get('rating_to_next', 0) or 0):,} to {next_stage.get('name', 'next form')}.")
         else:
-            self.level_bar.set_target_value(1000); self.rating_lbl.setText(f"{rating:,} rolling XP · top V1 form")
+            self.evo_help.setText(f"Peak Level Rating {peak_rating:,} · final V1 evolution earned.")
+
+        level = snap.get("level", {})
+        self.level_lbl.setText(
+            f"LV. {int(level.get('current_level', 1) or 1)} {str(level.get('name', 'Recruit')).upper()}"
+            f"  ·  {int(level.get('rating', 0) or 0):,} rolling XP")
 
         ch = snap.get("charge", {})
-        pct = int(ch.get("percent",0) or 0)
-        self.charge_state.setText(str(ch.get("state","DORMANT")))
+        pct = int(ch.get("percent", 0) or 0)
+        self.charge_state.setText(str(ch.get("state", "DORMANT")))
         self.charge_pct.setText(f"{pct}%")
         self.charge_bar.set_target_value(pct)
-        self.charge_meta.setText(f"{int(ch.get('current_xp',0)):,} / {int(ch.get('target_xp',1000)):,} XP today")
+        self.charge_meta.setText(
+            f"{int(ch.get('current_xp', 0)):,} / {int(ch.get('target_xp', 1000)):,} XP today")
 
-        env_id = snap.get("environment","training")
-        env = next((e for e in snap.get("environments",[]) if e.get("id")==env_id), None)
-        self.env_name.setText(str(env.get("name","Training Room")).upper() if env else "TRAINING ROOM")
-        self.stage.set_state(snap)
+        self._render_scene(snap)
 
         if full:
-            self._rebuild_environments(snap)
+            self._rebuild_stage_strip(snap)
             sh = snap.get("shield", {})
-            self.shield_name.setText(str(sh.get("name","SHIELD CHARGING")))
-            days = int(sh.get("clean_days",0) or 0); target = sh.get("next_target") or days
+            self.shield_name.setText(str(sh.get("name", "SHIELD CHARGING")))
+            days = int(sh.get("clean_days", 0) or 0); target = sh.get("next_target") or days
             self.shield_days.setText(f"{days} / {target} DAYS" if sh.get("next_target") else f"{days} CLEAN DAYS")
-            self.shield_bar.setValue(int(sh.get("progress",0) or 0))
+            self.shield_bar.setValue(int(sh.get("progress", 0) or 0))
             if not sh.get("tracking_today"):
                 self.shield_help.setText(
-                    "Protection progress only counts monitored days. The current Qt shell does not yet start Layer-1 tracking by itself.")
+                    "Protection only counts monitored days. Full Layer-1 tracking is still pending in the installed Qt runtime.")
             elif sh.get("unlocked"):
                 self.shield_help.setText("Shield active. Longer clean streaks strengthen it further.")
             else:
@@ -523,7 +482,7 @@ class CharacterPage(QScrollArea):
         try:
             snap = character_engine.snapshot()
         except Exception as ex:
-            self.env_help.setText(f"Character state unavailable: {ex}")
+            self.world_help.setText(f"Character state unavailable: {ex}")
             return
         self._apply_live(snap, full=True)
 

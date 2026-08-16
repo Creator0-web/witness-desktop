@@ -26,6 +26,11 @@ if sound_dir.exists():
     for wav in sound_dir.glob("*.wav"):
         datas.append((str(wav), "ui_qt/assets/sounds"))
 
+character_dir = root / "ui_qt" / "assets" / "character"
+if character_dir.exists():
+    for image in character_dir.glob("*.png"):
+        datas.append((str(image), "ui_qt/assets/character"))
+
 # The current Qt shell intentionally does not start the legacy Layer-1 runtime,
 # so only modules reachable from qt_main.py are bundled. The source remains in
 # the repo for the upcoming runtime-integration pass.

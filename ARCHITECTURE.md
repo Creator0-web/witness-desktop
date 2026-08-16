@@ -47,7 +47,7 @@ Visual tokens live in `ui_qt/theme.py`. Current product direction intentionally
 uses a restrained palette: charcoal neutrals, green primary, red only for
 losing/danger, gold only for records/major victories.
 
-As of **v7.52.2 / build 2026-08-16-a**, the Qt delivery layer has moved beyond a
+As of **v7.53.0 / build 2026-08-16-b**, the Qt delivery layer has moved beyond a
 one-screen preview into the character/emotional-reward phase:
 
 - `ui_qt/arena.py` is the approved visual-structure path: stronger Battle Pacer,
@@ -91,6 +91,20 @@ one-screen preview into the character/emotional-reward phase:
 - v7.50 also fixes the unsolicited periodic sound reported on Windows: passive Ghost
   replay may still advance and show visual feedback on the live timer, but it never
   plays sound. Audio is reserved for confirmed user actions/action-triggered milestones.
+- v7.53 replaces the placeholder vector avatar with the eight **person-approved composite
+  character artworks** documented in `CHARACTER_ART.md`: Wanderer, Seeker, Apprentice,
+  Builder, Disciplined Man, Operator, Elite and Sovereign. `shared/character_engine.py`
+  projects these forms from the same canonical rolling Level Rating using permanent peak
+  milestones (0 / 5,000 / 12,800 / 24,100 / 39,200 / 55,000 / 75,000 / 100,000). This is
+  visual evolution only: no new XP currency, no score awards and no changes to Ghost/records/
+  canonical levels. The first five form thresholds align with current game-level entries;
+  the last three extend the same rating curve beyond today's top V1 level. Character art is
+  stored under `ui_qt/assets/character/` and explicitly bundled by `packaging/witness.spec`.
+  The composite scenes are treated as **chapters/forms**, not swappable independent worlds;
+  unlocked earlier chapters can be revisited as memories. A later layered/3D asset pass can
+  separate body from environment. The image-led renderer supports restrained pan/zoom,
+  firefly/rain motion, daily Charge Core pulse and earned Shield field without pretending a
+  static illustration is true 3D.
 - The v7.45 stylesheet explicitly makes QLabel backgrounds transparent. This
   fixed the black-rectangle/old-table look visible in the first Windows Qt
   screenshot; do not reintroduce per-label opaque backgrounds unless a specific

@@ -1,5 +1,9 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.53.0 Character Art Progression V1:** the Character page now uses the eight approved
+> original evolution artworks and a peak-Level-Rating journey from Wanderer to Sovereign.
+> Existing installed users should receive this through the proven Update & Restart pipeline.
+
 > **v7.52.2 updater verification:** publish this patch while v7.52.1 remains installed, then
 > use WITNESS's own `UPDATE v7.52.2` -> Update & Restart flow. A short green
 > `UPDATED TO v7.52.2` badge confirms the automatic restart reached the new build.
@@ -102,14 +106,16 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.52.1
+### Current Qt state — v7.53.0
 
 The approved responsive Arena/History/Progression/Character structure remains intact. v7.52.1
-keeps v7.51 per-Windows-user profile isolation and the desktop distribution/update foundation while preserving the v7.50 **Character** page: a full-frame interactive 2.5D avatar
-(drag to rotate, wheel to zoom), level-driven visual evolution, daily-XP charge aura,
-behavior-derived attributes, Protection Shield progress, and level-unlocked Training /
-Winter / Tropical / Desert / City Night environments. The small Arena rank emblem
-opens the Character page.
+keeps v7.51 per-Windows-user profile isolation and the desktop distribution/update foundation while preserving the v7.50 Character-state contract while replacing its placeholder vector avatar
+with the eight approved original character artworks. The page now shows a full-frame image-led
+2.5D scene (drag to inspect, wheel to zoom), permanent peak-Level-Rating evolution, daily-XP
+Core charge, behavior-derived attributes, Protection Shield progress, and a journey strip that
+lets earned earlier forms be revisited as memories. The current composite art couples body and
+world per form; independent swappable environments remain a later layered/3D asset step. The
+small Arena rank emblem opens the Character page.
 
 The character layer does **not** change scoring. `shared/character_engine.py` only
 projects canonical game/telemetry history into visual state; `shared/game_engine.py`

@@ -20,6 +20,98 @@ import game_engine
 
 ENV_KEY = "character_environment_v1"
 
+FORM_PEAK_KEY = "character_peak_rating_v1"
+
+# Character evolution is a presentation layer over the canonical rolling Level
+# Rating. It does not create a second XP currency or alter game-engine levels.
+# The first five milestones align with the existing canonical level thresholds;
+# later forms extend the same rating curve so the visual journey can keep growing
+# after the current top V1 game level.
+EVOLUTION_STAGES = [
+    {"id": "wanderer", "name": "Wanderer", "threshold": 0,
+     "asset": "01_wanderer.png", "world": "Wild Path",
+     "theme": "RAW POTENTIAL", "description": "The journey begins in the wild."},
+    {"id": "seeker", "name": "Seeker", "threshold": 5000,
+     "asset": "02_seeker.png", "world": "Hidden Ruins",
+     "theme": "INTENTION", "description": "A direction begins to emerge."},
+    {"id": "apprentice", "name": "Apprentice", "threshold": 12800,
+     "asset": "03_apprentice.png", "world": "Training Ruins",
+     "theme": "DISCIPLINE", "description": "Potential is being trained into skill."},
+    {"id": "builder", "name": "Builder", "threshold": 24100,
+     "asset": "04_builder.png", "world": "Frontier Outpost",
+     "theme": "SELF-CREATION", "description": "Structure replaces wandering."},
+    {"id": "disciplined_man", "name": "Disciplined Man", "threshold": 39200,
+     "asset": "05_disciplined_man.png", "world": "Old City",
+     "theme": "CONTROL", "description": "He enters civilization without losing himself."},
+    {"id": "operator", "name": "Operator", "threshold": 55000,
+     "asset": "06_operator.png", "world": "City Rooftop",
+     "theme": "PRECISION", "description": "Power becomes fast, quiet and efficient."},
+    {"id": "elite", "name": "Elite", "threshold": 75000,
+     "asset": "07_elite.png", "world": "High-Rise Terrace",
+     "theme": "REFINEMENT", "description": "Capability no longer needs to announce itself."},
+    {"id": "sovereign", "name": "Sovereign", "threshold": 100000,
+     "asset": "08_sovereign.png", "world": "Sovereign Hall",
+     "theme": "AUTHORITY", "description": "Earned command. Nothing left to prove."},
+]
+
+
+def _int_state(key: str, default=0) -> int:
+    try:
+        return int(float(db.game_state_get(key, str(default)) or default))
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def evolution_for_peak_rating(peak_rating: int) -> dict:
+    """Project a permanent visual form from the canonical Level Rating peak."""
+    peak = max(0, int(peak_rating or 0))
+    index = 0
+    for i, stage in enumerate(EVOLUTION_STAGES):
+        if peak >= int(stage["threshold"]):
+            index = i
+    current = dict(EVOLUTION_STAGES[index])
+    next_stage = dict(EVOLUTION_STAGES[index + 1]) if index + 1 < len(EVOLUTION_STAGES) else None
+    if next_stage is None:
+        progress = 1.0
+        to_next = 0
+    else:
+        start = int(current["threshold"]); end = int(next_stage["threshold"])
+        progress = max(0.0, min(1.0, (peak - start) / max(1, end - start)))
+        to_next = max(0, end - peak)
+    catalog = []
+    for i, stage in enumerate(EVOLUTION_STAGES):
+        row = dict(stage)
+        row["index"] = i + 1
+        row["unlocked"] = peak >= int(stage["threshold"])
+        catalog.append(row)
+    return {
+        "peak_rating": peak,
+        "index": index + 1,
+        "count": len(EVOLUTION_STAGES),
+        "current": current,
+        "next": next_stage,
+        "progress": progress,
+        "rating_to_next": to_next,
+        "stages": catalog,
+    }
+
+
+def _project_peak_rating(current_rating: int, include_history=False) -> int:
+    current = max(0, int(current_rating or 0))
+    demo_mode = db.game_state_get("demo_mode", "0") == "1"
+    stored = 0 if demo_mode else _int_state(FORM_PEAK_KEY, 0)
+    historical = 0
+    if include_history:
+        try:
+            historical = int(game_engine.progression_snapshot()["all_time"]["peak_rating"] or 0)
+        except Exception:
+            historical = 0
+    peak = max(current, stored, historical)
+    # Synthetic demo history must never permanently unlock real-account forms.
+    if not demo_mode and peak > stored:
+        db.game_state_set(FORM_PEAK_KEY, str(peak))
+    return peak
+
 ENVIRONMENTS = [
     {"id": "training", "name": "Training Room", "unlock_level": 1,
      "description": "Neutral performance arena."},
@@ -303,18 +395,27 @@ def live_state(now_ts=None) -> dict:
     snap = game_engine.dashboard_snapshot(now_ts)
     level = snap["level"]
     envs = environment_catalog(level.get("peak_level", 1))
+    peak_rating = _project_peak_rating(level.get("rating", 0), include_history=False)
     return {
         "generated_ts": now_ts,
         "level": level,
         "charge": _charge_from_dashboard(snap),
         "environment": selected_environment(level.get("peak_level", 1)),
         "environments": envs,
+        "evolution": evolution_for_peak_rating(peak_rating),
+        "demo_preview": db.game_state_get("demo_mode", "0") == "1",
         "battle": snap.get("daily_battle", {}),
     }
 
 
 def snapshot(now_ts=None) -> dict:
     live = live_state(now_ts)
+    # Full Character-page entry is allowed to scan progression history so an
+    # existing account immediately receives every form its real historical
+    # Level Rating already earned. The 2-second live path never does this scan.
+    rating = int(live.get("level", {}).get("rating", 0) or 0)
+    peak_rating = _project_peak_rating(rating, include_history=True)
+    live["evolution"] = evolution_for_peak_rating(peak_rating)
     shield = protection_shield()
     live["shield"] = shield
     live["attributes"] = attributes(shield=shield)

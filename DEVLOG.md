@@ -53,6 +53,80 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-16 -- v7.53.0 Character Art Progression V1: approved 8-form journey
+Requested by: person completed the Character concept-art progression, explicitly preferred the
+original fuller/healthier character set over later regenerated wirey/bonier versions, uploaded
+the eight approved images in order, and asked to start putting that evolution into WITNESS.
+
+Touched:
+- `ui_qt/assets/character/` (new): bundled the approved full-resolution original art for
+  Wanderer, Seeker, Apprentice, Builder, Disciplined Man, revised agile Operator, Elite and
+  Sovereign.
+- `CHARACTER_ART.md` (new): V1 art bible documenting identity continuity, the eight approved
+  forms/worlds, Core/Charge/Shield meaning, world progression, motion rules and the explicit
+  rejection of the later gaunt/wirey regeneration direction.
+- `shared/character_engine.py`: added a downstream visual-evolution projection from the same
+  canonical rolling Level Rating. Forms use permanent peak-rating milestones at 0 / 5,000 /
+  12,800 / 24,100 / 39,200 / 55,000 / 75,000 / 100,000. The first five align with existing
+  canonical game-level thresholds; forms 6-8 extend the same Rating curve beyond the current
+  top V1 game level. This does NOT award XP, alter Ghost/records, or rewrite level math. Real
+  peak visual progress is persisted only as an unlock; synthetic demo mode never permanently
+  unlocks real-account forms. Full Character-page entry can reconcile old history from
+  `game_engine.progression_snapshot()`, while the 2-second live path stays cheap.
+- `ui_qt/character_page.py`: replaced the placeholder vector avatar with an image-led 2.5D
+  Character scene. The approved art fills the main frame; drag pans/inspects, wheel zooms,
+  double-click resets view, early chapters get subtle fireflies, city chapters restrained rain,
+  today's existing Charge softly pulses the Core, and earned Shield state draws a subtle field.
+  Added an 8-form Journey strip. Earned earlier forms can be revisited as memories; demo mode can
+  preview all art for testing. Composite art is deliberately treated as stage/world chapters,
+  not fake swappable environments, because body and background are currently one image.
+- `packaging/witness.spec`: now explicitly bundles `ui_qt/assets/character/*.png` in frozen
+  Windows builds.
+- `app_version.py`, `qt_main.py`, `ARCHITECTURE.md`, `QT_BUILD.md`, `README.md`,
+  `DISTRIBUTION.md`, `NEXT_CHAT_PROMPT.md`: advanced release/build docs to v7.53.0 /
+  `2026-08-16-b` and recorded the new Character contract.
+
+Did NOT touch: `core/` in any way; person did not authorize Layer 1. Also did not modify
+canonical `shared/game_engine.py`, canonical `shared/db.py`, Activity XP, Ghost math, records,
+rolling-level thresholds/decay/demotion rules, updater/hash/install logic, profile isolation, or
+fitness integration. Protected-file hash comparison against v7.52.2 confirms all `core/*.py`,
+`shared/game_engine.py` and `shared/db.py` remain byte-for-byte unchanged.
+
+What changed and why:
+The previous Character foundation proved interaction/state but its asset-free vector body was not
+emotionally strong enough. The person designed a coherent visual story from wilderness to earned
+authority and supplied the exact approved art. V1 now makes that art the hero while preserving the
+backend boundary: real-life scoring produces canonical Level Rating; Character only projects that
+history into a permanent form and current-state effects. Because the approved images are composite
+character+environment scenes, V1 uses them honestly as chapters. Independent environment swapping
+should wait for separated layers/3D models instead of showing an old body and calling it a new
+environment.
+
+Validation:
+- Pure evolution boundary test: ratings 0/5,000/12,800/24,100/39,200/55,000/75,000/100,000 map
+  to Wanderer/Seeker/Apprentice/Builder/Disciplined Man/Operator/Elite/Sovereign as intended.
+- Empty-profile `character_engine.snapshot()` returns Wanderer cleanly without touching score.
+- Character and packaging Python compile/AST checks pass.
+- Protected canonical/core hash check vs v7.52.2: unchanged.
+- Release source validator passes after cache cleanup; no DB, secrets, demo history or personal
+  runtime data are included.
+- PySide6 is not available in this Linux sandbox, so final visual sizing/pan/particle smoothness
+  must be judged on the person's Windows install after publishing v7.53.0.
+
+Left for next session:
+Publish v7.53.0 through the now-proven GitHub pipeline, then let installed v7.52.2 discover it via
+Update & Restart. On Windows, open CHARACTER and judge: full-frame art crop/quality, 8-form journey
+strip at the person's screen size, Core pulse subtlety, Shield field, fireflies/rain, and demo-mode
+preview. If the visual page feels right, do not reopen character art direction immediately; the
+next meaningful product phase is either Reserve/Core behavior or full Qt Layer-1 runtime
+integration. Independent swappable environments and true 3D remain later asset/runtime work.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing;
+never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes
+Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update
+NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were
+updated before ending the session.
+
 ## 2026-08-16 -- v7.52.2 updater end-to-end verification release
 Requested by: person successfully installed the corrected v7.52.1 Windows desktop build and
 asked to prove the remaining distribution promise: future versions should be discovered and
