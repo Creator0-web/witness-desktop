@@ -659,7 +659,7 @@ class SettingsPage(SimplePage):
         protection = card(); prl = QVBoxLayout(protection)
         prh = QLabel("PROTECTION"); prh.setObjectName("SectionTitle")
         prd = QLabel(
-            "Active-window drift protection now runs inside the modern WITNESS app. "
+            "Active-window drift protection and the legacy screen-vision guard now run inside the modern WITNESS app. "
             "Ordinary drift escalates quietly; a red-line trigger closes supported browsers immediately "
             "and attempts a 120-minute site lock. SOS videos play inside the new intervention screen."
         )
@@ -730,7 +730,7 @@ class SettingsPage(SimplePage):
             self.protection_status_label.setText(
                 f"Protection runs while WITNESS is open · {vids} SOS video{'s' if vids != 1 else ''} ready")
         except Exception:
-            self.protection_status_label.setText("Protection runs while WITNESS is open.")
+            self.protection_status_label.setText("Protection + screen scanning run while WITNESS is open.")
         clear_layout(self.activities)
         for a in game_engine.list_activities(True):
             row=QFrame(); row.setObjectName("MetricTile")

@@ -1,12 +1,13 @@
-"""Qt delivery bridge for the proven Layer-1 active-window protection.
+"""Qt delivery bridge for the proven Layer-1 protection runtime.
 
-This module intentionally does NOT reimplement drift detection.  It starts the
-frozen ``core/tracker.py`` WindowTracker and translates its queue events onto the
-Qt thread.  Red-line actions reuse ``core/nuclear.py`` and ``core/blocker.py``.
+This module intentionally does NOT reimplement drift detection. It starts the
+frozen ``core/tracker.py`` active-window tracker *and* the frozen
+``core/vision.py`` ScreenVision guard used by the legacy full runtime. Their
+red-line events are translated onto the Qt thread and reuse the existing
+``core/nuclear.py`` + ``core/blocker.py`` response.
 
-Only the delivery surface is new: modern Qt notices/interventions and an
-embedded SOS video player.  No XP is awarded here; WITNESS scoring remains
-manual and explicit.
+Only the delivery surface is modern Qt. No XP is awarded here; WITNESS scoring
+remains manual and explicit.
 """
 from __future__ import annotations
 
@@ -28,6 +29,11 @@ try:
     from tracker import WindowTracker
 except Exception:  # pragma: no cover - expected on non-Windows dev hosts
     WindowTracker = None
+
+try:
+    from vision import ScreenVision
+except Exception:  # pragma: no cover - defensive packaging/runtime fallback
+    ScreenVision = None
 
 import blocker
 import config
@@ -84,7 +90,7 @@ def open_sos_folder() -> None:
 
 
 class ProtectionRuntime(QObject):
-    """Bridge frozen WindowTracker events into Qt-safe signals."""
+    """Bridge frozen WindowTracker + ScreenVision protection into Qt-safe signals."""
 
     status_changed = Signal(str, bool)
     drift_stage = Signal(int, str, str)
@@ -107,6 +113,7 @@ class ProtectionRuntime(QObject):
         }
         self.events: queue.Queue = queue.Queue()
         self.tracker = None
+        self.screen_vision = None
         self._running = False
         self._redline_busy = False
         self.poll = QTimer(self)
@@ -133,11 +140,25 @@ class ProtectionRuntime(QObject):
             self.state["stop"] = False
             self.tracker = WindowTracker(self.state, self.events)
             self.tracker.start()
+
+            # Restore the old full-runtime screen guard exactly as it existed:
+            # ScreenVision owns its adaptive trust cadence, two-flag confirmation,
+            # incident history and vision prompt. Qt only supplies the callback.
+            vision_ready = False
+            if ScreenVision is not None and os.environ.get("ANTHROPIC_API_KEY"):
+                self.screen_vision = ScreenVision(self.state, self._vision_redline)
+                self.screen_vision.start()
+                vision_ready = True
+
             self._running = True
             self.poll.start()
             self.lock_poll.start()
             self._refresh_lock()
-            self.status_changed.emit("PROTECTION · ACTIVE", True)
+            self.status_changed.emit(
+                "PROTECTION · ACTIVE · SCREEN GUARD" if vision_ready
+                else "PROTECTION · ACTIVE · TITLE ONLY",
+                True,
+            )
         except Exception as ex:
             self.status_changed.emit("PROTECTION · ERROR", False)
             self.redline_actions.emit({"error": str(ex)})
@@ -180,19 +201,28 @@ class ProtectionRuntime(QObject):
             return
         check_kind, proc, title = str(ev[1]), str(ev[2]), str(ev[3])
         if check_kind == "redline":
-            blob = f"{proc} {title}".lower()
-            if any(safe in blob for safe in NEVER_REDLINE):
-                return
-            if self._redline_busy:
-                return
-            self._redline_busy = True
-            self.redline_detected.emit(proc, title)
-            threading.Thread(
-                target=self._execute_redline, args=(proc, title), daemon=True,
-                name="witness-redline",
-            ).start()
+            self._request_redline(proc, title)
         elif check_kind in ("drift", "offtask", "routine"):
             self.drift_checkin.emit(proc, title)
+
+    def _vision_redline(self, proc: str, title: str) -> None:
+        # Called from frozen ScreenVision's worker thread after its original
+        # two-consecutive-FLAG confirmation. Keep the same whitelist that the
+        # legacy Tk nuclear_response() applied before browser termination.
+        self._request_redline(str(proc), str(title))
+
+    def _request_redline(self, proc: str, title: str) -> None:
+        blob = f"{proc} {title}".lower()
+        if any(safe in blob for safe in NEVER_REDLINE):
+            return
+        if self._redline_busy:
+            return
+        self._redline_busy = True
+        self.redline_detected.emit(proc, title)
+        threading.Thread(
+            target=self._execute_redline, args=(proc, title), daemon=True,
+            name="witness-redline",
+        ).start()
 
     def _execute_redline(self, proc: str, title: str) -> None:
         result = {
@@ -287,6 +317,7 @@ class ProtectionDialog(QDialog):
         self._allow_close = not self.hard_lock
         self._videos = sos_videos()
         self._video_index = 0
+        self._autoplay_started = False
         self.setWindowTitle("WITNESS · PROTECTION")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.setModal(self.hard_lock)
@@ -342,7 +373,7 @@ class ProtectionDialog(QDialog):
         outer.addWidget(vf, 1)
 
         controls = QHBoxLayout(); controls.setSpacing(9)
-        self.next_btn = QPushButton("PLAY RESET VIDEO")
+        self.next_btn = QPushButton("NEXT RESET VIDEO")
         self.next_btn.clicked.connect(self.play_next_video)
         controls.addWidget(self.next_btn)
         controls.addStretch(1)
@@ -353,8 +384,15 @@ class ProtectionDialog(QDialog):
         outer.addLayout(controls)
 
         self._update_video_empty_state()
-        if self._videos and not preview:
-            QTimer.singleShot(450, self.play_next_video)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Autoplay only after the native video surface is visible. This is more
+        # reliable on Windows than arming playback from __init__, and it applies
+        # to both real interventions and the Settings preview.
+        if self._videos and not self._autoplay_started:
+            self._autoplay_started = True
+            QTimer.singleShot(120, self.play_next_video)
 
     def set_source(self, proc: str, title: str) -> None:
         clean = (title or proc or "Detected window").strip()

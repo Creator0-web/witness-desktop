@@ -53,6 +53,33 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-17 -- v7.57.1 restore legacy ScreenVision + auto-start SOS video
+Requested by: person tested v7.57.0 and said the modern popup/video UI was good, but protection felt materially slower/different than the old app. They specifically remembered sexual content being detected/shut down very quickly and asked to go back to the old drift settings while keeping the clean modern graphics. They also asked that the SOS video start automatically when the intervention opens rather than requiring a Play click.
+
+Touched:
+- `ui_qt/protection_runtime.py`: corrected the v7.57.0 integration omission. Qt now starts the unchanged legacy `ScreenVision` alongside the unchanged `WindowTracker`. Vision events feed the same modern red-line callback/browser shutdown/site-lock path. The existing hard whitelist remains identical to legacy `main.py`. The top-bar status distinguishes `SCREEN GUARD` from `TITLE ONLY` when the Anthropic key/runtime is unavailable.
+- `ui_qt/protection_runtime.py`: redesigned intervention remains unchanged visually, but video playback is now armed from `showEvent()` after the native Qt video surface is visible. The first SOS video auto-starts for both real intervention and Settings preview; the remaining control is `NEXT RESET VIDEO`.
+- `packaging/requirements-desktop.txt` / `packaging/witness.spec`: added the runtime dependencies required by frozen ScreenVision (`anthropic`, Pillow/ImageGrab, `mss`) and explicit hidden imports.
+- `ui_qt/pages.py`: Settings copy now accurately says active-window + screen-vision protection.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.57.1 / `2026-08-17-b` and corrected the earlier claim that active-window tracking alone represented the old protection behavior.
+
+Did NOT touch: **no file under `core/` was modified**. The person explicitly authorized going back to the old drift behavior/settings, but the correct fix required only reconnecting the already-existing frozen `core/vision.py`; its timing, adaptive trust logic, prompt and confirmation behavior remain byte-for-byte unchanged. `shared/game_engine.py` and `shared/db.py` are also unchanged. Camera/presence, phone detection, legacy voice/chat and PatternWatcher remain retired.
+
+What changed and why:
+v7.57.0 started only `WindowTracker`, which looks at foreground process/title text. That meant explicit red-line titles still shut down immediately, but sexual/suggestive imagery on otherwise ordinary browser pages was no longer being classified from the pixels. In the old full runtime, `ScreenVision` was separately started by `main.py`; it captured the browser screen and asked Claude Vision for FLAG/SAFE. That missing thread explains the person's report that v7.57.0 felt slow and different. v7.57.1 restores that exact old vision engine behind the modern Qt delivery.
+
+Legacy ScreenVision timing preserved exactly: 45-second startup delay; SAFE browser trust scans every 300s, CAUTIOUS every 90s, DANGER every 30s; incognito/private and browsers with 3+ recorded incidents are DANGER; two consecutive FLAG results are required, with the second confirmation scan accelerated to about 10 seconds after the first. Window-title `RED_LINE_KEYWORDS` are still checked by WindowTracker every 5 seconds and do not wait for ScreenVision.
+
+Validation:
+- full-project `compileall` passes; AST parse passes for 73 Python files.
+- every `core/*.py` file plus `shared/game_engine.py` and `shared/db.py` hash-identical to v7.57.0.
+- static package source now includes ScreenVision dependencies/hidden imports. Final screenshot capture, Anthropic network classification, QtMultimedia autoplay and browser taskkill still require the real Windows/GitHub build test.
+
+Left for next session:
+Publish/tag `v7.57.1`, update installed WITNESS, and confirm top bar says **PROTECTION · ACTIVE · SCREEN GUARD** (not TITLE ONLY). Leave WITNESS open for >45 seconds before testing because that is the original ScreenVision startup delay. Test only with disposable browser tabs because confirmed red-lines intentionally kill supported browsers. Settings → Preview Intervention should now start the first SOS video automatically. If the person's remembered sub-30-second behavior still does not match, do not blindly shorten `core/vision.py`: first inspect which browser/trust state is being used and whether the older remembered version predates the current adaptive-trust ScreenVision v2.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-17 -- v7.57.0 modern drift protection + safe factory reset
 Requested by: person explicitly asked to get the backend drift protection back into the modern installed app, specifically the automatic shutdown/browser-close protection and SOS video player, while leaving unnecessary old features retired. They also asked for a Settings factory-reset-style action that returns all scoring/progress to zero. They asked whether the old intervention UI should be redesigned to avoid bringing the old-app feel back; product decision is yes: preserve the proven Layer-1 behavior, redesign only its Qt delivery.
 

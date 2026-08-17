@@ -31,15 +31,18 @@ if character_dir.exists():
     for image in character_dir.glob("*.png"):
         datas.append((str(image), "ui_qt/assets/character"))
 
-# Qt now starts the frozen Layer-1 active-window tracker through
-# ui_qt/protection_runtime.py. PyInstaller follows those imports; explicit
-# multimedia hidden imports keep the embedded local SOS video surface reliable.
+# Qt starts the frozen Layer-1 active-window tracker plus the legacy ScreenVision
+# guard through ui_qt/protection_runtime.py. Explicit multimedia/vision hidden
+# imports keep embedded SOS playback and screenshot analysis reliable when frozen.
 a = Analysis(
     [str(root / "qt_main.py")],
     pathex=[str(p) for p in search_paths],
     binaries=[],
     datas=datas,
-    hiddenimports=["winsound", "PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets"],
+    hiddenimports=[
+        "winsound", "PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets",
+        "anthropic", "PIL.ImageGrab", "PIL.Image", "mss",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

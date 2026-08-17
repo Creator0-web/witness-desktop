@@ -2,3 +2,6 @@ PySide6>=6.7,<7
 PyInstaller>=6.14,<7
 psutil>=6,<8
 pywin32>=306,<400
+anthropic>=0.40,<1
+Pillow>=10,<13
+mss>=9,<11

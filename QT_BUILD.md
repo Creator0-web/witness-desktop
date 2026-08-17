@@ -1,20 +1,19 @@
-# v7.57.0 Modern Drift Protection + Safe Factory Reset
+# v7.57.1 Full Screen Guard Restore + Auto SOS
 
-Current Qt build: **v7.57.0 / `2026-08-17-a`**. The installed Qt app now starts the unchanged
-`core/tracker.py` active-window tracker through `ui_qt/protection_runtime.py`. Ordinary distraction
-drift uses the existing Layer-1 thresholds but appears through modern Qt notices/interventions. A
-red-line event immediately reuses the existing browser-kill action and attempts the existing 120-minute
-hosts lock, while the new intervention can play local SOS videos inside WITNESS with QtMultimedia.
+Current Qt build: **v7.57.1 / `2026-08-17-b`**. Windows feedback showed that v7.57.0 restored only
+`core/tracker.py`, which preserved title-keyword red-lines but omitted the old `core/vision.py`
+ScreenVision guard. That omission made sexual/suggestive content without a red-line title behave like
+ordinary distraction instead of being actively classified from the screen.
 
-This is a focused runtime migration, not a revival of the old application: camera/presence, phone
-detection, open-ended voice/chat, PatternWatcher, ScreenVision and the Tkinter intervention UI stay
-retired. Real active-window telemetry now exists while the modern app is open, so Protection Shield
-can advance from actual monitored evidence.
+v7.57.1 starts the unchanged ScreenVision guard beside the unchanged WindowTracker. ScreenVision keeps
+its original adaptive trust intervals (safe 300s / cautious 90s / danger 30s), 45-second startup delay,
+two-consecutive-FLAG confirmation and 10-second confirmation rescan after a first flag. Confirmed vision
+red-lines enter the same modern Qt browser-kill/site-lock intervention. Camera/presence, phone detection,
+open-ended voice/chat and PatternWatcher remain retired.
 
-Settings adds Protection preview/SOS-folder controls and a safe Factory Reset Progress action. Reset
-creates a forced backup first and applies on the next launch before SQLite opens, returning score,
-progression, Character/Core/Shield and history to zero while preserving integrations, SOS videos and
-Backups.
+The redesigned intervention now auto-starts the first local SOS video after its native video surface is
+visible, including Settings preview. The button is now NEXT RESET VIDEO rather than requiring PLAY.
+Factory Reset behavior from v7.57.0 is unchanged.
 
 # v7.56.1 3D Control Feel + Live Update Checks
 
@@ -108,17 +107,16 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-17-a / v7.57.0 Modern Drift Protection + Safe Factory Reset**
+Current Qt visual build: **2026-08-17-b / v7.57.1 Full Screen Guard Restore + Auto SOS**
 
-## v7.57.0 protection/runtime bridge
+## v7.57.1 protection/runtime bridge
 
-The installed Qt app now starts the unchanged `core/tracker.py` active-window tracker. Its queue is
-bridged by `ui_qt/protection_runtime.py` into modern Qt notices/interventions, including an embedded
-local SOS video player. Red-line handling reuses unchanged `core/nuclear.py` browser termination and
-`core/blocker.py` timed site lock. This is deliberately a focused Layer-1 migration: camera/presence,
-phone detection, open-ended voice/chat, legacy pattern narration and the old Tkinter popups are not
-started. Real activity/flagged/red-line telemetry now exists while the modern app is open, so Shield
-can progress from genuine monitoring rather than synthetic data.
+The installed Qt app now starts the unchanged `core/tracker.py` active-window tracker and unchanged
+`core/vision.py` ScreenVision guard. Their red-line paths are bridged by `ui_qt/protection_runtime.py`
+into modern Qt notices/interventions, including an embedded local SOS video player that starts
+automatically. Red-line handling reuses unchanged `core/nuclear.py` browser termination and
+`core/blocker.py` timed site lock. Webcam/presence, phone detection, open-ended voice/chat, legacy
+pattern narration and the old Tkinter popups remain retired.
 
 Settings also has a safe next-launch Factory Reset Progress flow. It snapshots the current database
 first, then resets score/progression/history while preserving the local profile identity, integrations,

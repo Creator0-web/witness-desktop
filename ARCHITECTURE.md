@@ -145,14 +145,16 @@ one-screen preview into the character/emotional-reward phase:
   fixed the black-rectangle/old-table look visible in the first Windows Qt
   screenshot; do not reintroduce per-label opaque backgrounds unless a specific
   component needs one.
-- **v7.57 focused protection migration:** Qt now starts the unchanged `core/tracker.py`
-  active-window tracker through `ui_qt/protection_runtime.py`. Ordinary distracting-window
-  escalation is delivered as modern Qt notices/intervention UI; red-line events reuse unchanged
-  `core/nuclear.py` browser termination and `core/blocker.py` timed hosts lock. The old Tkinter
-  popup/video delivery is not reused. This migration is intentionally narrow: camera/presence,
-  phone detection, legacy AI voice/chat, PatternWatcher, ScreenVision and TrailWatcher are not
-  started by Qt. `trail.record_incident()` is still called on a confirmed red-line so existing trail
-  history remains compatible. The runtime bridge may call `core/`; it must not rewrite Layer 1.
+- **v7.57.1 protection parity correction:** Qt starts both the unchanged `core/tracker.py`
+  active-window tracker and the unchanged `core/vision.py` ScreenVision guard through
+  `ui_qt/protection_runtime.py`. This restores the legacy full-runtime distinction between title-based
+  red-line detection and actual screenshot/vision detection of sexual or suggestive screen content.
+  ScreenVision keeps its original adaptive trust cadence, two-consecutive-FLAG confirmation, incident
+  history and prompt; Qt only supplies the callback. Confirmed red-lines reuse unchanged
+  `core/nuclear.py` browser termination and `core/blocker.py` timed hosts lock, while the intervention
+  stays modern Qt and now auto-starts the first SOS video after the dialog is visible. Camera/presence,
+  phone detection, legacy AI voice/chat and PatternWatcher remain retired. `trail.record_incident()`
+  is still called on a confirmed red-line. The runtime bridge may call `core/`; it must not rewrite Layer 1.
 
 ### Local profile / data isolation (v7.51+)
 
@@ -496,9 +498,9 @@ state. It owns no XP rules. Current contracts:
 - **Protection Shield** requires consecutive monitored days with no flagged drift,
   red-line or SOS breach. Unobserved days are never silently counted as clean. The
   first shield appears at 14 clean monitored days; longer streaks strengthen it.
-- As of v7.57, the Qt app writes real active-window/flagged/red-line telemetry while it is open,
-  so Shield progress can advance from genuine monitored days. Do not infer camera/presence coverage:
-  the v7.57 protection bridge monitors the foreground Windows process/title only.
+- As of v7.57.1, the Qt app writes real active-window/flagged/red-line telemetry and also runs the
+  legacy browser ScreenVision guard while it is open, so Shield progress can advance from genuine
+  monitored days. Do not infer webcam/presence or phone coverage: those old subsystems remain retired.
 
 ## _archive/ — quarantined, not deleted
 

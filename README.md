@@ -1,13 +1,11 @@
 # WITNESS v2 — AI accountability coach
 
-> **v7.57.0 Modern Drift Protection + Safe Factory Reset:** the installed Qt app now starts the
-> proven frozen active-window tracker while WITNESS is open. Normal distraction drift escalates
-> through modern lightweight notices and a redesigned intervention screen; red-line detection
-> immediately closes supported browsers, attempts the existing 120-minute site lock, records real
-> telemetry for Shield/History, and can play local SOS videos inside WITNESS. Settings adds Protection
-> controls/preview plus a typed-confirmation Factory Reset Progress action that creates a safety backup
-> and resets XP, Ghost, Levels, records, Character/Core/Shield and history on the next launch while
-> preserving integrations, SOS videos and backups. `core/` itself is unchanged.
+> **v7.57.1 Full Screen Guard Restore + Auto SOS:** the modern Qt app now starts both pieces of the
+> proven protection path: the frozen active-window tracker and the frozen ScreenVision guard that
+> analyzes browser screenshots for sexual/suggestive content. Title-keyword red-lines still respond
+> immediately; vision red-lines retain the old adaptive trust cadence and two-confirmation logic, then
+> reuse the same browser shutdown + 120-minute lock response. The redesigned Qt intervention remains,
+> but its first local SOS video now starts automatically when the dialog opens. `core/` is unchanged.
 
 > **v7.56.1 3D Control Feel + Live Update Checks:** Windows testing validated that the interactive
 > 3D concept feels good. Drag direction is now natural on both axes, sensitivity is reduced, and
@@ -151,12 +149,13 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.57.0
+### Current Qt state — v7.57.1
 
-The installed Qt app now runs the frozen active-window drift/red-line tracker while WITNESS is open.
-The top bar shows protection status; Settings can preview the redesigned intervention, open the SOS
-video folder, and stage a safe backup-first progress reset. Ordinary drift escalates through modern
-notices; a confirmed red-line force-closes supported browsers and attempts the existing timed site lock.
+The installed Qt app now runs the frozen active-window drift/red-line tracker **and** the legacy
+ScreenVision browser guard while WITNESS is open. The top bar reports whether SCREEN GUARD is active;
+Settings can preview the redesigned intervention, which auto-starts the first SOS video, open the SOS
+video folder, and stage a safe backup-first progress reset. Confirmed red-lines force-close supported
+browsers and attempt the existing timed site lock.
 
 The approved responsive Arena/History/Progression/Character structure remains intact. v7.55.2 adds a self-cleaning GitHub Actions release checkout; the v7.55
 keeps the eight-stage ladder and approved composite artwork, but makes the character-state model
