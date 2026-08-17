@@ -1,3 +1,21 @@
+# v7.57.0 Modern Drift Protection + Safe Factory Reset
+
+Current Qt build: **v7.57.0 / `2026-08-17-a`**. The installed Qt app now starts the unchanged
+`core/tracker.py` active-window tracker through `ui_qt/protection_runtime.py`. Ordinary distraction
+drift uses the existing Layer-1 thresholds but appears through modern Qt notices/interventions. A
+red-line event immediately reuses the existing browser-kill action and attempts the existing 120-minute
+hosts lock, while the new intervention can play local SOS videos inside WITNESS with QtMultimedia.
+
+This is a focused runtime migration, not a revival of the old application: camera/presence, phone
+detection, open-ended voice/chat, PatternWatcher, ScreenVision and the Tkinter intervention UI stay
+retired. Real active-window telemetry now exists while the modern app is open, so Protection Shield
+can advance from actual monitored evidence.
+
+Settings adds Protection preview/SOS-folder controls and a safe Factory Reset Progress action. Reset
+creates a forced backup first and applies on the next launch before SQLite opens, returning score,
+progression, Character/Core/Shield and history to zero while preserving integrations, SOS videos and
+Backups.
+
 # v7.56.1 3D Control Feel + Live Update Checks
 
 Current Qt build: **v7.56.1 / `2026-08-16-g`**. Windows testing confirmed the 3D interaction
@@ -90,7 +108,22 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-16-g / v7.56.1 3D Control Feel + Live Update Checks**
+Current Qt visual build: **2026-08-17-a / v7.57.0 Modern Drift Protection + Safe Factory Reset**
+
+## v7.57.0 protection/runtime bridge
+
+The installed Qt app now starts the unchanged `core/tracker.py` active-window tracker. Its queue is
+bridged by `ui_qt/protection_runtime.py` into modern Qt notices/interventions, including an embedded
+local SOS video player. Red-line handling reuses unchanged `core/nuclear.py` browser termination and
+`core/blocker.py` timed site lock. This is deliberately a focused Layer-1 migration: camera/presence,
+phone detection, open-ended voice/chat, legacy pattern narration and the old Tkinter popups are not
+started. Real activity/flagged/red-line telemetry now exists while the modern app is open, so Shield
+can progress from genuine monitoring rather than synthetic data.
+
+Settings also has a safe next-launch Factory Reset Progress flow. It snapshots the current database
+first, then resets score/progression/history while preserving the local profile identity, integrations,
+SOS rescue videos and Backups.
+
 
 ## Desktop distribution / updater (v7.52.1)
 

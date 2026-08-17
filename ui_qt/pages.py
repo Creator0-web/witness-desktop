@@ -4,10 +4,10 @@ import calendar as pycalendar
 from datetime import date, datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
-    QHeaderView, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
+    QApplication, QHeaderView, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QInputDialog,
     QScrollArea, QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem, QTextEdit,
     QVBoxLayout, QWidget,
 )
@@ -21,6 +21,7 @@ import video_memories
 import profile_runtime
 
 from . import audio, onboarding, theme
+from .protection_runtime import open_sos_folder, sos_videos
 from .widgets import card, clear_layout
 from .progression import ProgressionView
 
@@ -594,9 +595,11 @@ class InsightsPage(SimplePage):
 
 
 class SettingsPage(SimplePage):
+    preview_protection = Signal()
+
     def __init__(self, parent=None):
-        super().__init__("Scoring & Demo", parent,
-                         "Configure what matters. The score stays manual and explicit.")
+        super().__init__("Settings", parent,
+                         "Protection, data safety and scoring controls. Score stays manual and explicit.")
         self.status = QLabel(""); self.status.setObjectName("Secondary")
         self.layout_.addWidget(self.status)
 
@@ -653,6 +656,35 @@ class SettingsPage(SimplePage):
         fl.addWidget(fh); fl.addWidget(fd); fl.addWidget(self.sound_btn, 0, Qt.AlignmentFlag.AlignLeft)
         self.layout_.addWidget(feedback)
 
+        protection = card(); prl = QVBoxLayout(protection)
+        prh = QLabel("PROTECTION"); prh.setObjectName("SectionTitle")
+        prd = QLabel(
+            "Active-window drift protection now runs inside the modern WITNESS app. "
+            "Ordinary drift escalates quietly; a red-line trigger closes supported browsers immediately "
+            "and attempts a 120-minute site lock. SOS videos play inside the new intervention screen."
+        )
+        prd.setWordWrap(True); prd.setObjectName("Secondary")
+        self.protection_status_label = QLabel(""); self.protection_status_label.setObjectName("Muted")
+        prrow = QHBoxLayout()
+        open_sos = QPushButton("Open SOS Video Folder"); open_sos.clicked.connect(self.open_sos_videos)
+        preview = QPushButton("Preview Intervention"); preview.clicked.connect(self.preview_protection.emit)
+        prrow.addWidget(open_sos); prrow.addWidget(preview); prrow.addStretch(1)
+        prl.addWidget(prh); prl.addWidget(prd); prl.addWidget(self.protection_status_label); prl.addLayout(prrow)
+        self.layout_.addWidget(protection)
+
+        danger = card(); dgl = QVBoxLayout(danger)
+        dgh = QLabel("FACTORY RESET"); dgh.setObjectName("SectionTitle")
+        dgd = QLabel(
+            "Return WITNESS progress to a brand-new state: XP, Ghost history, Levels, records, Character/Core/Shield state, "
+            "computer/drift history, notes and demo data reset to zero. Your installed app, integration secrets, SOS videos "
+            "and safety backups are preserved."
+        )
+        dgd.setWordWrap(True); dgd.setObjectName("Secondary")
+        reset_btn = QPushButton("Factory Reset Progress"); reset_btn.setObjectName("Danger")
+        reset_btn.clicked.connect(self.factory_reset_progress)
+        dgl.addWidget(dgh); dgl.addWidget(dgd); dgl.addWidget(reset_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        self.layout_.addWidget(danger)
+
         demo = card(); dl=QVBoxLayout(demo)
         h=QLabel("SYNTHETIC HISTORY"); h.setObjectName("SectionTitle")
         d=QLabel("Safe test history uses the same XP ledger shape as real actions and can be removed without deleting real XP.")
@@ -693,6 +725,12 @@ class SettingsPage(SimplePage):
         self.sound_btn.setText("SOUND FEEDBACK · ON" if audio.enabled() else "SOUND FEEDBACK · OFF")
         self.sound_btn.setObjectName("Primary" if audio.enabled() else "")
         self.sound_btn.style().unpolish(self.sound_btn); self.sound_btn.style().polish(self.sound_btn)
+        try:
+            vids = len(sos_videos())
+            self.protection_status_label.setText(
+                f"Protection runs while WITNESS is open · {vids} SOS video{'s' if vids != 1 else ''} ready")
+        except Exception:
+            self.protection_status_label.setText("Protection runs while WITNESS is open.")
         clear_layout(self.activities)
         for a in game_engine.list_activities(True):
             row=QFrame(); row.setObjectName("MetricTile")
@@ -703,6 +741,42 @@ class SettingsPage(SimplePage):
             lay.addWidget(meta)
             edit=QPushButton("Edit"); edit.clicked.connect(lambda _=False, x=a: self.edit_activity(x))
             lay.addWidget(edit); self.activities.addWidget(row)
+
+    def open_sos_videos(self):
+        try:
+            open_sos_folder()
+        except Exception as ex:
+            QMessageBox.critical(self, "SOS videos", str(ex))
+        self.refresh()
+
+    def factory_reset_progress(self):
+        answer = QMessageBox.warning(
+            self, "Factory reset WITNESS progress?",
+            "This resets ALL progress/history to zero on the next launch.\n\n"
+            "A safety backup will be created first. Integration secrets, SOS videos and existing backups are preserved.\n\n"
+            "This cannot be undone from the app except by restoring that backup.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        typed, ok = QInputDialog.getText(
+            self, "Confirm factory reset",
+            "Type RESET to confirm that XP, Levels, records and history should return to zero:")
+        if not ok or typed.strip().upper() != "RESET":
+            return
+        try:
+            result = profile_runtime.stage_factory_reset()
+            restart_ready = profile_runtime.schedule_app_restart(delay_seconds=2)
+            msg = (
+                "Factory reset is staged and the safety backup was created. "
+                "WITNESS will now close and the reset will be applied before the database opens again."
+            )
+            if not restart_ready:
+                msg += "\n\nOpen WITNESS again manually to finish the reset."
+            QMessageBox.information(self, "Reset staged", msg)
+            QApplication.quit()
+        except Exception as ex:
+            QMessageBox.critical(self, "Factory reset", str(ex))
 
     def open_profile_folder(self):
         try:

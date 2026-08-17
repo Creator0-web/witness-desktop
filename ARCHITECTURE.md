@@ -145,9 +145,14 @@ one-screen preview into the character/emotional-reward phase:
   fixed the black-rectangle/old-table look visible in the first Windows Qt
   screenshot; do not reintroduce per-label opaque backgrounds unless a specific
   component needs one.
-- Qt still does **not** start the full Layer-1 tracking/voice/intervention
-  runtime. The old Tkinter entry point remains the full-runtime fallback until
-  that migration is planned and proven separately.
+- **v7.57 focused protection migration:** Qt now starts the unchanged `core/tracker.py`
+  active-window tracker through `ui_qt/protection_runtime.py`. Ordinary distracting-window
+  escalation is delivered as modern Qt notices/intervention UI; red-line events reuse unchanged
+  `core/nuclear.py` browser termination and `core/blocker.py` timed hosts lock. The old Tkinter
+  popup/video delivery is not reused. This migration is intentionally narrow: camera/presence,
+  phone detection, legacy AI voice/chat, PatternWatcher, ScreenVision and TrailWatcher are not
+  started by Qt. `trail.record_incident()` is still called on a confirmed red-line so existing trail
+  history remains compatible. The runtime bridge may call `core/`; it must not rewrite Layer 1.
 
 ### Local profile / data isolation (v7.51+)
 
@@ -190,6 +195,14 @@ a backup restore for the next launch. Restore never replaces an open SQLite conn
 imports `secrets.json`. `.session_active.json` is removed on clean exit; if it survives a crash or
 process kill, the next launch reports recovery and writes/checks a backup. `crash_reports/` stores
 uncaught Python tracebacks locally. None of these folders belong in release source.
+
+**v7.57 factory-reset contract:** Settings may stage a progress reset only for the next launch.
+`profile_runtime.stage_factory_reset()` first creates a forced rotating safety backup, then writes a
+marker. `activate()` applies that marker before `db.init()` can open SQLite. The reset removes scoring,
+progression, character/game state, telemetry/history, notes/demo/local delivery prefs and derived
+insight history. It deliberately preserves `profile.json`, `secrets.json`, `sos_videos/`, `Backups/`
+and any active `block_lock.txt`. This is a progress/history reset, not deletion of the person's rescue
+media, integrations or rollback path. Never implement factory reset by deleting an open database.
 
 
 ### Interactive 3D control feel (v7.56.1+)
@@ -483,8 +496,9 @@ state. It owns no XP rules. Current contracts:
 - **Protection Shield** requires consecutive monitored days with no flagged drift,
   red-line or SOS breach. Unobserved days are never silently counted as clean. The
   first shield appears at 14 clean monitored days; longer streaks strengthen it.
-- Because `qt_main.py` still does not start Layer-1 tracking, real shield progress
-  depends on telemetry produced by the full runtime/Tkinter path until runtime migration.
+- As of v7.57, the Qt app writes real active-window/flagged/red-line telemetry while it is open,
+  so Shield progress can advance from genuine monitored days. Do not infer camera/presence coverage:
+  the v7.57 protection bridge monitors the foreground Windows process/title only.
 
 ## _archive/ — quarantined, not deleted
 

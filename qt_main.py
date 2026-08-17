@@ -1,9 +1,9 @@
-"""WITNESS PySide6 visual shell — v7.56.1 3D Control Feel + Live Update Checks.
+"""WITNESS PySide6 desktop shell — v7.57.0 Modern Drift Protection + Safe Factory Reset.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.
-The legacy main.py remains the fallback/reference UI while the Qt surface is proven
-screen-by-screen. Both entry points now activate the same per-Windows-user data profile.
+The legacy main.py remains a fallback/reference UI. The Qt app now starts the frozen
+active-window drift tracker and delivers its protection through modern Qt surfaces. Both entry points now activate the same per-Windows-user data profile.
 """
 import os
 import sys
@@ -66,8 +66,10 @@ def main():
     app.setApplicationName("WITNESS")
     app.setOrganizationName("WITNESS")
     app.aboutToQuit.connect(profile_runtime.end_session)
-    win = WitnessMainWindow()
-    if "--smoke-test" in sys.argv:
+    smoke_test = "--smoke-test" in sys.argv
+    win = WitnessMainWindow(start_protection=not smoke_test)
+    app.aboutToQuit.connect(win.shutdown)
+    if smoke_test:
         marker = os.environ.get("WITNESS_SMOKE_MARKER", "").strip()
         if marker:
             try:

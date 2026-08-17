@@ -31,15 +31,15 @@ if character_dir.exists():
     for image in character_dir.glob("*.png"):
         datas.append((str(image), "ui_qt/assets/character"))
 
-# The current Qt shell intentionally does not start the legacy Layer-1 runtime,
-# so only modules reachable from qt_main.py are bundled. The source remains in
-# the repo for the upcoming runtime-integration pass.
+# Qt now starts the frozen Layer-1 active-window tracker through
+# ui_qt/protection_runtime.py. PyInstaller follows those imports; explicit
+# multimedia hidden imports keep the embedded local SOS video surface reliable.
 a = Analysis(
     [str(root / "qt_main.py")],
     pathex=[str(p) for p in search_paths],
     binaries=[],
     datas=datas,
-    hiddenimports=["winsound"],
+    hiddenimports=["winsound", "PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

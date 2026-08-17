@@ -13,6 +13,7 @@ from . import onboarding, theme
 from .arena import ArenaPage
 from .character_page import CharacterPage
 from .pages import CalendarPage, InsightsPage, RecordsPage, SettingsPage
+from .protection_runtime import DriftNotice, ProtectionDialog, ProtectionRuntime
 from .update_service import UpdateService
 from app_version import BUILD_TAG, DISPLAY_VERSION
 import update_manager
@@ -21,7 +22,7 @@ import game_engine
 
 
 class WitnessMainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, start_protection=True):
         super().__init__()
         self.setWindowTitle(f"WITNESS · {DISPLAY_VERSION} · build {BUILD_TAG}")
         self.resize(1320, 860)
@@ -36,6 +37,7 @@ class WitnessMainWindow(QMainWindow):
         self._page_anim = None
         self._available_update = None
         self._last_update_check = 0.0
+        self._protection_dialog = None
 
         central = QWidget(); self.setCentralWidget(central)
         outer = QVBoxLayout(central)
@@ -60,6 +62,9 @@ class WitnessMainWindow(QMainWindow):
         th.addWidget(self.updated_badge)
         if self.updated_badge.isVisible():
             QTimer.singleShot(12000, lambda: self.updated_badge.setVisible(False))
+        self.protection_badge = QLabel("◇ PROTECTION · STARTING")
+        self.protection_badge.setObjectName("ProtectionBadge")
+        th.addWidget(self.protection_badge)
         self.live = QLabel("●  LIVE"); self.live.setObjectName("LiveBadge")
         th.addWidget(self.live); outer.addWidget(top)
 
@@ -76,6 +81,7 @@ class WitnessMainWindow(QMainWindow):
             self.stack.addWidget(p)
         self.pages["arena"].request_page.connect(self.show_page)
         self.pages["arena"].changed.connect(self._on_arena_changed)
+        self.pages["settings"].preview_protection.connect(self._preview_protection)
 
         nav = QWidget()
         nav.setObjectName("BottomNav")
@@ -109,12 +115,84 @@ class WitnessMainWindow(QMainWindow):
         self.update_timer.timeout.connect(self._check_for_updates)
         self.update_timer.start(update_manager.channel_config()["check_minutes"] * 60 * 1000)
 
+        # Layer-1 protection is now bridged into Qt without rewriting core/.
+        # Only the proven active-window tracker is started here; legacy camera,
+        # phone, open-ended voice/chat and pattern-analysis surfaces stay retired.
+        self.protection = ProtectionRuntime(self)
+        self.protection.status_changed.connect(self._on_protection_status)
+        self.protection.drift_stage.connect(self._on_drift_stage)
+        self.protection.drift_checkin.connect(self._on_drift_checkin)
+        self.protection.redline_detected.connect(self._on_redline_detected)
+        self.protection.redline_actions.connect(self._on_redline_actions)
+        self.drift_notice = DriftNotice(self)
+        if start_protection:
+            QTimer.singleShot(550, self.protection.start)
+        else:
+            self._on_protection_status("PROTECTION · SMOKE TEST", False)
+
         # First-run setup is local-only and never interrupts an established account.
         if onboarding.should_show():
             QTimer.singleShot(650, self._show_onboarding)
-        if profile_runtime.current_profile().get("previous_unclean_shutdown"):
+        profile_state = profile_runtime.current_profile()
+        if profile_state.get("previous_unclean_shutdown"):
             QTimer.singleShot(1100, self._show_recovery_notice)
+        if profile_state.get("factory_reset_applied"):
+            QTimer.singleShot(1250, self._show_factory_reset_notice)
 
+
+    def _on_protection_status(self, text, active):
+        self.protection_badge.setText(("◆ " if active else "◇ ") + str(text))
+        self.protection_badge.setProperty("active", bool(active))
+        self.protection_badge.style().unpolish(self.protection_badge)
+        self.protection_badge.style().polish(self.protection_badge)
+
+    def _on_drift_stage(self, stage, proc, title):
+        if self._protection_dialog is not None and self._protection_dialog.isVisible():
+            return
+        self.drift_notice.show_stage(stage, proc, title)
+
+    def _open_protection_dialog(self, proc, title, *, hard_lock=False, preview=False):
+        if self._protection_dialog is not None and self._protection_dialog.isVisible():
+            if hard_lock and not getattr(self._protection_dialog, "hard_lock", False):
+                self._protection_dialog.close()
+            else:
+                self._protection_dialog.raise_(); self._protection_dialog.activateWindow()
+                return self._protection_dialog
+        self.drift_notice.hide()
+        dlg = ProtectionDialog(self, hard_lock=hard_lock, preview=preview)
+        dlg.set_source(proc, title)
+        if hard_lock and not preview:
+            dlg.walked_away.connect(self.protection.mark_walked_away)
+        dlg.finished.connect(lambda _=0, d=dlg: self._clear_protection_dialog(d))
+        self._protection_dialog = dlg
+        dlg.show(); dlg.raise_(); dlg.activateWindow()
+        return dlg
+
+    def _clear_protection_dialog(self, dialog):
+        if self._protection_dialog is dialog:
+            self._protection_dialog = None
+
+    def _on_drift_checkin(self, proc, title):
+        self._open_protection_dialog(proc, title, hard_lock=False)
+
+    def _on_redline_detected(self, proc, title):
+        self._open_protection_dialog(proc, title, hard_lock=True)
+
+    def _on_redline_actions(self, result):
+        dlg = self._protection_dialog
+        if dlg is not None and dlg.isVisible() and getattr(dlg, "hard_lock", False):
+            dlg.set_action_result(dict(result or {}))
+
+    def _preview_protection(self):
+        self._open_protection_dialog(
+            "preview", "Protection screen preview · no browser will be closed",
+            hard_lock=False, preview=True)
+
+    def shutdown(self):
+        try:
+            self.protection.stop()
+        except Exception:
+            pass
 
     def _check_for_updates(self):
         """Check quietly while the app is open; never block the Qt thread."""
@@ -139,6 +217,15 @@ class WitnessMainWindow(QMainWindow):
             except TypeError:
                 self.pages["arena"].refresh()
             self.pages["settings"].refresh()
+
+    def _show_factory_reset_notice(self):
+        info = profile_runtime.current_profile().get("factory_reset_applied") or {}
+        backup = str(info.get("backup_path") or "")
+        extra = f"\n\nPre-reset safety backup: {backup}" if backup else ""
+        QMessageBox.information(
+            self, "WITNESS reset complete",
+            "Progress has been returned to a brand-new state: scoring, Levels, records, Character/Core/Shield state and history are back at zero. "
+            "Your integrations, SOS videos and safety backups were preserved." + extra)
 
     def _show_recovery_notice(self):
         prof = profile_runtime.current_profile()

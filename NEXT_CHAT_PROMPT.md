@@ -14,45 +14,52 @@ anything in it unless I explicitly say so in this conversation. DEVLOG.md is the
 read every entry because older decisions still apply.
 
 CURRENT FOCUS RIGHT NOW:
-**v7.56.1 / Qt build `2026-08-16-g` — 3D Control Feel + Live Update Checks** is the current
-source. v7.56.0 was successfully installed/tested on Windows. The person said the 3D character
-interaction "honestly feels nice," which is the key acceptance signal for continuing toward real 3D.
-Two concrete usability issues were found and are fixed in v7.56.1: drag felt inverted on both axes,
-and rotation was too sensitive/fast for the desired powerful feel. They also noted new releases only
-showed after restarting the app because the prior periodic updater check was six hours.
+**v7.57.0 / Qt build `2026-08-17-a` — Modern Drift Protection + Safe Factory Reset** is the
+current source. The person approved the slow/natural 3D controls in v7.56.1, then deliberately paused
+production-quality 3D because that asset pipeline felt too complicated for now. They asked to restore
+the valuable old backend behavior instead: drift protection, automatic red-line browser shutdown and
+the SOS video intervention, but without reviving the old Tkinter visual feel. They also asked for a
+Settings factory-reset-style action that returns scoring/progress to zero.
 
-WHAT v7.56.1 CHANGES:
-- `ui_qt/character_3d.py`: manual drag now changes target yaw/pitch in the opposite direction from
-  v7.56.0 on both axes, with lower sensitivity (`0.0045` yaw / `0.0035` pitch per pixel). Actual
-  orientation eases toward the target each 33ms frame, making turns slower, smoother and weightier.
-  Auto Rotate is slowed as well.
-- `update_manager.py` + `release_channel.json`: stable release polling now supports minute cadence;
-  packaged channel defaults to a 10-minute check interval while retaining old `check_hours` fallback.
-- `ui_qt/shell.py`: startup check remains, periodic check uses `check_minutes`, and returning focus
-  to the WITNESS window triggers a quiet throttled background check when at least 60 seconds have
-  elapsed since the prior request. Update download/install semantics are unchanged and still explicit.
-- WILD/FORGED/NOIR theme evolution, eight-stage progression, Core/Charge/Shield, approved Portrait
-  artwork, XP/Ghost/records and release self-cleaning remain unchanged.
-- `core/`, `shared/game_engine.py`, and `shared/db.py` remain frozen/unchanged.
+WHAT v7.57.0 CHANGES:
+- `core/` remains byte-for-byte frozen. Qt now starts its existing `WindowTracker` through the new
+  `ui_qt/protection_runtime.py` bridge. Real foreground-process/title telemetry is therefore written
+  while the installed modern app is open.
+- Ordinary distracting windows keep the existing thresholds: lightweight modern notices at about
+  0.5 / 2.5 / 4.5 minutes and a redesigned intervention at about 6.5 minutes. No XP penalty is added;
+  the scoring system remains manual.
+- Red-line detection preserves the old hard-safe whitelist, then immediately reuses `nuclear.kill_browsers()`
+  and attempts `blocker.block_sites(120)`. Browser termination runs even if the modern UI is on another page.
+  Site locking still depends on Windows admin permission; the intervention reports whether it succeeded.
+- The old Tkinter intervention/video popup is retired in the Qt path. New `ProtectionDialog` is dark,
+  top-most, current-product styling and embeds local SOS videos with QtMultimedia. Settings can open the
+  SOS folder and preview the intervention without closing anything.
+- A top-bar PROTECTION ACTIVE badge makes runtime state visible. Smoke-test builds do not start protection.
+- Settings → Factory Reset Progress requires both a warning and typing RESET. It creates a forced safety
+  backup, stages reset for next launch, and restarts. XP/Ghost/Levels/records/Character/Core/Shield,
+  activity/drift history, notes/demo/derived data return to zero. Profile identity, integrations/secrets,
+  SOS videos, Backups and active block state are preserved.
+- Windows release requirements now include `psutil` + `pywin32`; PyInstaller explicitly includes QtMultimedia.
+- `shared/game_engine.py` and `shared/db.py` are unchanged.
 
 ACTUAL NEXT STEP ON WINDOWS/GITHUB:
-1. Publish/tag exactly `v7.56.1`; let installed WITNESS Update & Restart.
-2. In 3D LAB, verify dragging right/left/up/down now feels natural and that a long mouse drag produces
-   a slow, powerful rotation rather than a twitchy spin. Test Auto Rotate and wheel zoom too.
-3. To verify live updater discovery later, leave WITNESS open before publishing another tiny release;
-   either wait up to ~10 minutes or switch away/back after >60 seconds. The UPDATE button should appear
-   without restarting the app.
-4. Because the 3D interaction concept is now positively validated, the next major Character step is
-   a production-quality rigged avatar/renderer, not more procedural-mesh ornamentation. Preserve the
-   approved Portrait art and the accepted slow control feel while that production asset is developed.
+1. Publish/tag exactly `v7.57.0`; wait for the Windows Action to go fully green, then Update & Restart.
+2. Confirm the top bar reads **PROTECTION · ACTIVE**.
+3. Settings → Protection → **Preview Intervention** first. Add/test a local MP4 through **Open SOS Video Folder**.
+4. Test normal drift thresholds using a safe distracting window. Do not test red-line shutdown while valuable
+   browser tabs are open: by design it force-closes supported browsers. Verify the intervention accurately
+   reports browser-close + whether the 120-minute hosts lock succeeded.
+5. Only after confirming a pre-reset backup exists, test Factory Reset Progress. Expected result after restart:
+   all score/progression/history is fresh/zero while integrations, SOS videos and backups remain.
+6. Production-quality rigged 3D remains a later project; preserve the approved v7.56.1 slow interaction feel.
 
 KNOWN LIMITATIONS / DO NOT HIDE:
 - PySide6 is unavailable in the Linux build sandbox, so v7.56's final visual/performance acceptance
   depends on the real Windows build. Static compile/AST/source-tree validation passes.
 - The 3D Lab mesh is a procedural interaction prototype; it does not yet reproduce the approved face
   or cinematic clothing at production quality, and it has no skeletal animation.
-- Qt still does NOT start the complete Layer-1 tracker/voice/intervention runtime. Shield progress only
-  advances when real monitoring telemetry exists; never fake clean days.
+- Qt now starts the focused active-window drift/red-line subset of Layer 1. Camera/presence, phone, legacy
+  voice/chat, PatternWatcher and ScreenVision are still not started; do not claim full old-runtime parity.
 - `secrets.json` remains plaintext in the isolated local profile; never read/open/share it. DPAPI and
   Windows code signing are still future distribution hardening.
 

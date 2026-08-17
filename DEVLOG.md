@@ -53,6 +53,35 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-17 -- v7.57.0 modern drift protection + safe factory reset
+Requested by: person explicitly asked to get the backend drift protection back into the modern installed app, specifically the automatic shutdown/browser-close protection and SOS video player, while leaving unnecessary old features retired. They also asked for a Settings factory-reset-style action that returns all scoring/progress to zero. They asked whether the old intervention UI should be redesigned to avoid bringing the old-app feel back; product decision is yes: preserve the proven Layer-1 behavior, redesign only its Qt delivery.
+
+Touched:
+- `ui_qt/protection_runtime.py` (new): focused bridge from unchanged `core/tracker.py` queue events into Qt. Starts active-window monitoring while the modern app is open, delivers the existing 0.5/2.5/4.5-minute distraction escalation as modern lightweight drift notices, opens a redesigned intervention at the existing 6.5-minute threshold, and on red-line reuses unchanged `core/nuclear.py` browser termination + `core/blocker.py` 120-minute site-lock attempt. Keeps the old hard whitelist outside core to prevent known safe work/service titles from triggering browser termination. Red-line actions run off the GUI thread. Real activity/flagged/red-line telemetry now feeds the existing DB/Shield path.
+- `ui_qt/protection_runtime.py` also owns the new modern intervention/video delivery: dark current-era-compatible Qt surface, top-most hard red-line mode, embedded local SOS playback through QtMultimedia when available, next-video control, explicit RETURN/WALK AWAY action, and graceful no-video fallback. The old Tkinter popup/external-player visual is not reused.
+- `ui_qt/shell.py` / `qt_main.py`: start/stop the focused protection runtime with the Qt app, show a top-bar PROTECTION ACTIVE state, route drift/red-line signals to the modern UI, keep smoke tests from starting live protection, and surface post-reset completion.
+- `ui_qt/pages.py`: Settings now includes a Protection card (SOS folder + safe preview) and a typed-confirmation Factory Reset Progress danger action.
+- `profile_runtime.py`: safe next-launch factory reset. It creates a forced safety backup first, stages a marker, then before `db.init()` on next launch removes scoring/progression/character state and historical telemetry/notes/demo/derived data. It preserves profile identity, `secrets.json`, SOS videos, Backups and active block state. Installed Windows builds schedule a short delayed restart so the reset can apply before SQLite reopens.
+- `ui_qt/theme.py`: modern Protection badge styling.
+- `packaging/requirements-desktop.txt` / `packaging/witness.spec`: release build now includes psutil + pywin32 for the existing WindowTracker and QtMultimedia for embedded SOS playback.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.57.0 / `2026-08-17-a`.
+
+Did NOT touch: **no file under `core/` was modified**. The person authorized bringing drift protection back ("get that backend back into the app specificly drift protection"), but the implementation deliberately integrates the frozen existing core rather than altering its detection/escalation/red-line logic. `shared/game_engine.py` and `shared/db.py` are also unchanged. Camera/presence, phone detection, legacy voice/chat, PatternWatcher and ScreenVision remain retired from the Qt startup.
+
+What changed and why:
+The old app had valuable protection semantics but an obsolete visual/delivery layer. v7.57 treats Layer 1 as a service behind the modern product: the backend watches the active Windows process/title and writes real telemetry; Qt owns what the person sees. Normal drift now escalates without reviving the old dashboard, and red-line protection immediately attempts the old browser-close/site-lock behavior while showing a modern intervention with the person's local reset videos. This also restores honest Shield progression in the installed Qt app because clean/flagged monitoring evidence now exists while WITNESS is running. Factory reset is deliberately staged to next launch so an open SQLite database is never deleted in-process.
+
+Validation:
+- full-project `compileall` and AST parse pass for 73 Python files.
+- isolated two-process factory-reset test passes: database/progression/UI/history removed; `secrets.json`, SOS video and rotating safety backup preserved; reset marker consumed and application result reported.
+- release dependency/spec updated for Windows tracker + multimedia. Final frozen Windows runtime behavior (pywin32 active-window observation, actual taskkill, hosts-file permissions, QtMultimedia codecs/top-most behavior) still requires the GitHub Windows build and real-machine test.
+- `core/*.py` plus `shared/game_engine.py` and `shared/db.py` are to be hash-compared against v7.56.1 before packaging.
+
+Left for next session:
+Publish/tag v7.57.0, let the installed app Update & Restart, and first confirm the top bar says PROTECTION ACTIVE. In Settings use Preview Intervention before intentionally testing drift. Test an ordinary distracting title long enough to verify 3 lightweight escalation notices then the intervention; separately test red-line browser-close behavior only when it is safe to lose open browser tabs. The existing hosts-file lock still requires Windows administrator rights, so browser termination should be treated as the guaranteed automatic action and the dialog must accurately show whether the timed site lock succeeded. Test local MP4 playback from Settings → Open SOS Video Folder. Finally test Factory Reset only after the safety backup is visible; expected restart state is all XP/Levels/records/Character/Core/Shield/history back at zero while integrations/SOS videos/backups remain.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-16 -- v7.56.1 3D control feel + live update discovery
 Requested by: person tested v7.56.0 on Windows and said the 3D character interaction "honestly feels nice," but both manual drag axes felt inverted and rotation sensitivity was too high/fast for the powerful feel they want. They also reported that a newly published update only became visible after restarting WITNESS.
 

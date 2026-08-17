@@ -24,6 +24,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 import uuid
@@ -35,6 +36,7 @@ APP_NAME = "WITNESS"
 PROFILE_SCHEMA = 1
 PROFILE_FILE = "profile.json"
 PENDING_IMPORT_FILE = ".pending_legacy_import.json"
+PENDING_RESET_FILE = ".pending_factory_reset.json"
 IMPORT_HISTORY_FILE = "import_history.json"
 BACKUP_DIR = "Backups"
 CRASH_DIR = "crash_reports"
@@ -67,6 +69,21 @@ LEGACY_DIRS = (
     "day_breakdown_data",
     "insight_data",
     "journals",
+)
+
+# Factory-reset scope is deliberately narrower than deleting the whole profile.
+# Keep identity, API secrets, SOS rescue videos and Backups so a reset is both
+# safe and reversible. Everything that can influence scoring/progression/history
+# is recreated from zero on the next launch.
+FACTORY_RESET_FILES = (
+    "witness.db", "witness.db-wal", "witness.db-shm",
+    "witness_data.json", "progression.json", "conversation.json",
+    "xp_triggers.json", "xp_triggers_fired.json", "ui_settings.json",
+    "vision_history.json", "trail_history.json", "stats_model.json",
+    "life_data.json",
+)
+FACTORY_RESET_DIRS = (
+    "recaps", "video_memories", "day_breakdown_data", "insight_data", "journals",
 )
 
 # Small/critical directories included in automatic rotating backups. Large media
@@ -470,6 +487,102 @@ def stage_backup_restore(archive) -> dict:
         raise
 
 
+def _apply_pending_factory_reset(target: Path) -> dict | None:
+    marker = target / PENDING_RESET_FILE
+    payload = _read_json(marker, {})
+    if not isinstance(payload, dict) or not payload.get("requested_at"):
+        return None
+    removed = []
+    try:
+        # A staged import and a staged reset must never race; reset wins.
+        try:
+            (target / PENDING_IMPORT_FILE).unlink(missing_ok=True)
+        except Exception:
+            pass
+        for name in FACTORY_RESET_FILES:
+            path = target / name
+            if path.exists():
+                try:
+                    path.unlink()
+                    removed.append(name)
+                except Exception:
+                    pass
+        for name in FACTORY_RESET_DIRS:
+            path = target / name
+            if path.exists() and path.is_dir():
+                try:
+                    shutil.rmtree(path)
+                    removed.append(name + "/")
+                except Exception:
+                    pass
+        return {
+            "applied": True,
+            "requested_at": payload.get("requested_at", ""),
+            "applied_at": _utc_now(),
+            "removed": removed,
+            "backup_path": payload.get("backup_path", ""),
+        }
+    finally:
+        try:
+            marker.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def stage_factory_reset() -> dict:
+    """Stage a safe progress/history reset for the next launch.
+
+    The open SQLite database is never deleted in-process. A forced backup is
+    created first, then a marker is written. On the next activation the marker
+    is applied before ``db.init()`` can open the database. API secrets, profile
+    identity, SOS videos and the Backups folder are intentionally preserved.
+    """
+    root = data_dir().resolve()
+    backup = create_backup(reason="before-factory-reset", force=True)
+    payload = {
+        "requested_at": _utc_now(),
+        "mode": "reset_progress_history_on_next_launch",
+        "backup_path": str(backup.get("path", "")),
+        "preserves": ["profile.json", "secrets.json", "sos_videos/", "Backups/"],
+    }
+    try:
+        (root / PENDING_IMPORT_FILE).unlink(missing_ok=True)
+    except Exception:
+        pass
+    _write_json_atomic(root / PENDING_RESET_FILE, payload)
+    return {**payload, "backup": backup}
+
+
+def pending_factory_reset() -> dict | None:
+    obj = _read_json(data_dir() / PENDING_RESET_FILE, {})
+    return obj if isinstance(obj, dict) and obj.get("requested_at") else None
+
+
+def schedule_app_restart(delay_seconds=2) -> bool:
+    """Start a tiny Windows helper that reopens WITNESS after this process exits."""
+    if os.name != "nt":
+        return False
+    delay = max(1, int(delay_seconds))
+    helper = Path(tempfile.gettempdir()) / "WITNESS" / "restart-witness.cmd"
+    helper.parent.mkdir(parents=True, exist_ok=True)
+    if getattr(sys, "frozen", False):
+        command = f'start "" "{Path(sys.executable).resolve()}" /reset\r\n'
+    else:
+        source = app_dir() or Path(__file__).resolve().parent
+        entry = Path(source) / "qt_main.py"
+        command = f'start "" "{Path(sys.executable).resolve()}" "{entry.resolve()}" /reset\r\n'
+    body = (
+        "@echo off\r\n"
+        f"timeout /t {delay} /nobreak >nul\r\n"
+        + command +
+        'del "%~f0"\r\n'
+    )
+    helper.write_text(body, encoding="utf-8")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.Popen(["cmd.exe", "/d", "/c", str(helper)], creationflags=flags, close_fds=True)
+    return True
+
+
 def start_session() -> dict:
     payload = {"pid": os.getpid(), "started_at": _utc_now(), "app_dir": str(app_dir() or "")}
     _write_json_atomic(data_dir() / SESSION_FILE, payload)
@@ -512,13 +625,14 @@ def activate(application_dir=None) -> dict:
     target.mkdir(parents=True, exist_ok=True)
 
     previous_unclean = (target / SESSION_FILE).is_file()
-    pending_result = _apply_pending_import(target)
+    pending_reset_result = _apply_pending_factory_reset(target)
+    pending_result = None if pending_reset_result else _apply_pending_import(target)
 
     # Automatic legacy migration is intentionally conservative: only if this
     # profile has no canonical database yet.  A clean distribution contains no
     # user-data artifacts, so a new user's first launch remains empty.
     auto_result = None
-    if not (target / "witness.db").exists():
+    if not pending_reset_result and not (target / "witness.db").exists():
         recognized = _legacy_entries(source)
         if recognized:
             auto_result = _import_legacy(source, target, overwrite=False,
@@ -562,6 +676,7 @@ def activate(application_dir=None) -> dict:
         "profile_created": created,
         "auto_migration": auto_result,
         "pending_import_applied": pending_result,
+        "factory_reset_applied": pending_reset_result,
         "previous_unclean_shutdown": bool(previous_unclean),
         "startup_backup": auto_backup,
     }
@@ -578,6 +693,8 @@ def current_profile() -> dict:
         "data_dir": str(root),
         "app_dir": str(app_dir() or ""),
         "pending_import": pending_import(),
+        "pending_factory_reset": pending_factory_reset(),
+        "factory_reset_applied": (_ACTIVE or {}).get("factory_reset_applied"),
         "previous_unclean_shutdown": bool((_ACTIVE or {}).get("previous_unclean_shutdown", False)),
         "startup_backup": (_ACTIVE or {}).get("startup_backup"),
         "backup": backup_status(),
