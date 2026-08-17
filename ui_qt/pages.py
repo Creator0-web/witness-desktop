@@ -596,6 +596,7 @@ class InsightsPage(SimplePage):
 
 class SettingsPage(SimplePage):
     preview_protection = Signal()
+    test_redline = Signal()
 
     def __init__(self, parent=None):
         super().__init__("Settings", parent,
@@ -659,16 +660,17 @@ class SettingsPage(SimplePage):
         protection = card(); prl = QVBoxLayout(protection)
         prh = QLabel("PROTECTION"); prh.setObjectName("SectionTitle")
         prd = QLabel(
-            "Active-window drift protection and the legacy screen-vision guard now run inside the modern WITNESS app. "
-            "Ordinary drift escalates quietly; a red-line trigger closes supported browsers immediately "
-            "and attempts a 120-minute site lock. SOS videos play inside the new intervention screen."
+            "Rapid Screen Guard watches the pixels of any supported foreground browser rather than trusting the site title. "
+            "It scans on a fast cadence and confirms a visual FLAG within seconds; a confirmed red line force-closes supported "
+            "browsers and attempts a 120-minute site lock. SOS video starts automatically in the intervention screen."
         )
         prd.setWordWrap(True); prd.setObjectName("Secondary")
         self.protection_status_label = QLabel(""); self.protection_status_label.setObjectName("Muted")
         prrow = QHBoxLayout()
         open_sos = QPushButton("Open SOS Video Folder"); open_sos.clicked.connect(self.open_sos_videos)
         preview = QPushButton("Preview Intervention"); preview.clicked.connect(self.preview_protection.emit)
-        prrow.addWidget(open_sos); prrow.addWidget(preview); prrow.addStretch(1)
+        test_kill = QPushButton("Test Browser Shutdown"); test_kill.setObjectName("Danger"); test_kill.clicked.connect(self.test_redline.emit)
+        prrow.addWidget(open_sos); prrow.addWidget(preview); prrow.addWidget(test_kill); prrow.addStretch(1)
         prl.addWidget(prh); prl.addWidget(prd); prl.addWidget(self.protection_status_label); prl.addLayout(prrow)
         self.layout_.addWidget(protection)
 
@@ -727,10 +729,12 @@ class SettingsPage(SimplePage):
         self.sound_btn.style().unpolish(self.sound_btn); self.sound_btn.style().polish(self.sound_btn)
         try:
             vids = len(sos_videos())
-            self.protection_status_label.setText(
-                f"Protection runs while WITNESS is open · {vids} SOS video{'s' if vids != 1 else ''} ready")
+            if not self.protection_status_label.text():
+                self.protection_status_label.setText(
+                    f"Protection runs while WITNESS is open · {vids} SOS video{'s' if vids != 1 else ''} ready")
         except Exception:
-            self.protection_status_label.setText("Protection + screen scanning run while WITNESS is open.")
+            if not self.protection_status_label.text():
+                self.protection_status_label.setText("Protection + rapid screen scanning run while WITNESS is open.")
         clear_layout(self.activities)
         for a in game_engine.list_activities(True):
             row=QFrame(); row.setObjectName("MetricTile")
@@ -741,6 +745,29 @@ class SettingsPage(SimplePage):
             lay.addWidget(meta)
             edit=QPushButton("Edit"); edit.clicked.connect(lambda _=False, x=a: self.edit_activity(x))
             lay.addWidget(edit); self.activities.addWidget(row)
+
+    def set_protection_diagnostics(self, info: dict) -> None:
+        if not info.get("screen_guard"):
+            self.protection_status_label.setText(
+                "TITLE ONLY · Screen Guard is not running. Check the Anthropic integration before relying on visual detection.")
+            return
+        status = str(info.get("status", "WAITING"))
+        result = str(info.get("last_result", "WAITING"))
+        scans = int(info.get("scans_today", 0) or 0)
+        last_scan = float(info.get("last_scan", 0.0) or 0.0)
+        err = str(info.get("last_error", "") or "")
+        if err:
+            self.protection_status_label.setText(
+                f"SCREEN GUARD ERROR · {result} · {err[:140]}")
+            return
+        if last_scan > 0:
+            import time as _time
+            age = max(0, int(_time.time() - last_scan))
+            self.protection_status_label.setText(
+                f"RAPID SCREEN GUARD · {status} · last scan {age}s ago · {result} · {scans} scan(s) today")
+        else:
+            self.protection_status_label.setText(
+                f"RAPID SCREEN GUARD · {status} · waiting for a supported browser to be foreground")
 
     def open_sos_videos(self):
         try:
@@ -769,7 +796,8 @@ class SettingsPage(SimplePage):
             restart_ready = profile_runtime.schedule_app_restart(delay_seconds=2)
             msg = (
                 "Factory reset is staged and the safety backup was created. "
-                "WITNESS will now close and the reset will be applied before the database opens again."
+                "WITNESS will now fully close first; only after this process exits will the reset launch start, "
+                "and the old profile must be cleared before the database can open again."
             )
             if not restart_ready:
                 msg += "\n\nOpen WITNESS again manually to finish the reset."

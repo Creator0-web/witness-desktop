@@ -141,6 +141,7 @@ QWidget#BottomNav {{
     background: {t['chrome_bottom']};
     border-top: 1px solid {t['border']};
 }}
+QLabel#BrandMark {{ font-size:25px; font-weight:950; color:{accent}; padding:0px 2px 1px 0px; }}
 QLabel#Brand {{ font-size:22px; font-weight:900; letter-spacing:2px; color:{TEXT}; }}
 QLabel#EraBadge {{
     color:{accent}; font-size:10px; font-weight:850; letter-spacing:1px;

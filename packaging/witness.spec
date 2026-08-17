@@ -31,6 +31,12 @@ if character_dir.exists():
     for image in character_dir.glob("*.png"):
         datas.append((str(image), "ui_qt/assets/character"))
 
+branding_dir = root / "ui_qt" / "assets" / "branding"
+if branding_dir.exists():
+    for asset in branding_dir.iterdir():
+        if asset.is_file():
+            datas.append((str(asset), "ui_qt/assets/branding"))
+
 # Qt starts the frozen Layer-1 active-window tracker plus the legacy ScreenVision
 # guard through ui_qt/protection_runtime.py. Explicit multimedia/vision hidden
 # imports keep embedded SOS playback and screenshot analysis reliable when frozen.
@@ -68,6 +74,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(root / "ui_qt" / "assets" / "branding" / "witness.ico"),
 )
 
 coll = COLLECT(

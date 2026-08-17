@@ -44,7 +44,7 @@ For the provided same-repository flow:
 1. Put the clean WITNESS source in a GitHub repository.
 2. Commit the project, including `.github/workflows/release-windows.yml`.
 3. Ensure `app_version.VERSION` matches the release you are about to publish.
-4. Create/push tag matching `app_version.VERSION` (current release: `v7.57.1`).
+4. Create/push tag matching `app_version.VERSION` (current release: `v7.57.3`).
 5. GitHub Actions builds on Windows and creates a Release containing exactly:
    `WITNESS-Setup.exe` and `WITNESS-Setup.exe.sha256`.
 6. Give new users the Setup EXE from the latest published release.
@@ -106,8 +106,8 @@ The installer and SHA-256 file land in `release\`.
   signed MSIX/Microsoft Store path).
 - **Secrets:** API keys are profile-isolated but still plain text today. Move
   them to Windows-protected storage before broad distribution.
-- **Remaining Layer-1 migration:** v7.57.1 starts both the frozen active-window tracker and the frozen
-  ScreenVision browser guard inside Qt. Legacy webcam/presence, phone, open-ended voice/chat and
+- **Remaining Layer-1 migration:** Qt now starts both the active-window tracker and the rapid
+  ScreenVision browser guard inside Qt; Windows testing of v7.57.2 reports the drift detector working well. Legacy webcam/presence, phone, open-ended voice/chat and
   pattern-narration runtimes remain separate future product decisions.
 
 ## v7.52.2 live updater proof

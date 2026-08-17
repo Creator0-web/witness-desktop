@@ -53,6 +53,58 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-17 -- v7.57.3 factory-reset reliability + native triangle branding
+Requested by: person reported that after using Factory Reset the installed app still showed **Lv.6 Operator**, while also confirming that v7.57.2 drift detection is now working well. They also asked for basic Windows-app graphics because the executable still looked like a generic Python application, specifically suggesting a triangle.
+
+Touched:
+- `profile_runtime.py`: fixed a Windows next-launch reset race. The old restart helper waited only a fixed delay, so a new WITNESS process could start while the previous process still held `witness.db`. `_apply_pending_factory_reset()` also swallowed failed deletes and removed the reset marker in a `finally`, which could falsely report success while the old Level database survived. The reset applier now retries reset-scoped files/directories, verifies they are actually gone, preserves the pending reset marker + diagnostics if anything remains, and raises instead of consuming the request. The Windows restart helper now launches hidden PowerShell that waits for the current WITNESS PID to fully exit before relaunching, then adds the requested delay.
+- `qt_main.py`: after a reset was reported as applied, canonical initialization is now sanity-checked for exactly Level 1 / 0 rolling rating. Also sets a stable Windows AppUserModelID and loads the branded application icon.
+- `ui_qt/assets/branding/witness.ico`, `witness_icon.png` (new): dark rounded-square native icon with a large upward white triangle, restrained green inner triangle/Core and central light point. ICO contains 16/24/32/48/64/128/256 sizes.
+- `packaging/witness.spec`: bundles branding assets and embeds the ICO into `WITNESS.exe`.
+- `packaging/WITNESS.iss`: uses the same ICO for the installer; desktop/start-menu shortcuts inherit the executable icon.
+- `ui_qt/shell.py`, `ui_qt/theme.py`: added a small top-bar triangle brand mark; its accent follows the existing WILD/FORGED/NOIR presentation era.
+- `app_version.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.57.3 / `2026-08-17-d`.
+
+Did NOT touch: **no file under `core/` was modified**. The person explicitly said drift detection is working well, so `core/vision.py` and `core/nuclear.py` remain exactly as v7.57.2. Also did NOT change `shared/game_engine.py` or `shared/db.py`; XP/Ghost/records/eight-stage Level semantics remain canonical.
+
+What changed and why:
+The most plausible cause of the false reset was visible directly in the reset implementation: deletion happened on the next process, the launcher used only a two-second timer rather than waiting for the old PID, and failed Windows unlinks were silently ignored while the marker was always deleted. v7.57.3 makes reset fail-safe instead of best-effort. An isolated regression fixture that began with a synthetic stale Lv.6 Operator state now stages reset, starts a fresh activation, and returns Lv.1 Wanderer / rating 0. A separate forced-unlink-failure fixture confirms the reset marker survives instead of being consumed. Branding is intentionally lightweight and uses the existing visual language rather than adding another theme system.
+
+Validation:
+- Isolated reset regression: synthetic `rolling_level_v1` at Lv.6/rating 0 -> staged reset -> fresh process activation -> `current_level=1`, `name=Wanderer`, `rating=0`.
+- Forced deletion-failure regression: `_apply_pending_factory_reset()` raises, leaves `witness.db` in place, and preserves `.pending_factory_reset.json` for a later retry.
+- Branding ICO opens successfully with embedded sizes 16, 24, 32, 48, 64, 128 and 256.
+- Full Python AST/source validation and release-source validation pass after cleanup. The definitive executable/taskbar/installer icon and PID-wait behavior still require the GitHub Windows build.
+
+Left for next session:
+Publish/tag `v7.57.3`, Update & Restart, verify the Windows triangle icon, then run Factory Reset again and confirm WITNESS reopens at **Lv.1 Wanderer / 0 rolling XP**. Confirm Rapid Screen Guard remains unchanged and working well. If reset still fails, capture the exact startup error; the request marker should now survive rather than falsely disappear.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
+## 2026-08-17 -- v7.57.2 rapid screen guard + verified shutdown path
+Requested by: person tested v7.57.1 and said protection was still not good, asked whether WITNESS could actually shut down the page/browser, and reiterated that the objective is to visually scan the screen and interrupt sexual content very quickly before attention can lock onto it. This explicitly authorizes Layer-1 drift-protection changes.
+
+Touched:
+- `core/vision.py` **(Layer 1, explicitly authorized by the person in this turn)**: replaced the old adaptive multi-minute browser cadence with rapid protection behavior. Supported foreground browsers now scan every ~20s (15s danger), ScreenVision starts after ~3s, nominally safe page titles are no longer skipped, the existing two-FLAG safeguard remains but confirmation is accelerated to ~4s, and scan/API failures are surfaced in shared runtime diagnostics instead of silently returning SAFE. Daily rapid-mode cap raised to 1500 foreground-browser scans.
+- `core/nuclear.py` **(Layer 1, explicitly authorized by the same request)**: hardened `kill_browsers()` so red-line response uses `taskkill /f /t` and then a psutil kill fallback. The intended behavior is to force-close the entire supported browser, not only the current tab.
+- `ui_qt/protection_runtime.py`: added live screen-guard diagnostics and a manual end-to-end red-line test hook. Top status now says RAPID SCREEN GUARD when active.
+- `ui_qt/pages.py`: Settings Protection card now shows last screen-scan age/result/error/count and adds `Test Browser Shutdown`. The test is intentionally real, not a preview.
+- `ui_qt/shell.py`: wires diagnostics into Settings/top badge and adds a confirmation before the real shutdown test.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.57.2 / `2026-08-17-c`.
+
+Did NOT touch: scoring semantics, `shared/game_engine.py`, `shared/db.py`, character progression, Factory Reset, 3D controls, updater behavior, or the modern intervention/video UI. Camera/phone/legacy chat/voice remain retired.
+
+What changed and why:
+The shutdown mechanism itself was already capable of force-closing Chrome/Edge/Firefox/Brave/etc.; the reason the person saw weak behavior was detection latency. v7.57.1 restored the legacy ScreenVision exactly, including its 45s startup delay, Chrome's 5-minute SAFE cadence, 90s CAUTIOUS cadence, safe-title pixel-scan bypasses, and silent API-error-as-SAFE behavior. Those settings conflict with the stated product objective. v7.57.2 prioritizes short exposure time and makes failures observable. A manual `Test Browser Shutdown` separates detector problems from shutdown problems: if that test closes Chrome and opens SOS, the response path is proven independently of AI classification.
+
+Validation:
+- Python compile/AST checks pass locally after Layer-1 and Qt bridge edits.
+- Browser process termination and screenshot/Anthropic behavior still require the real Windows build to prove.
+- The real shutdown test intentionally closes supported browsers; save important tabs/work first.
+
+Left for next session:
+Publish/tag `v7.57.2`. On Windows, first click Settings → Protection → Test Browser Shutdown with disposable browser tabs. If Chrome closes and SOS opens, shutdown works. Then watch Settings diagnostics while a browser is foreground: last scan should update about every 15–20s and show SAFE/FLAG; any API/capture error should now be visible. Only after these two independent checks should detection quality be judged.
+
 ## 2026-08-17 -- v7.57.1 restore legacy ScreenVision + auto-start SOS video
 Requested by: person tested v7.57.0 and said the modern popup/video UI was good, but protection felt materially slower/different than the old app. They specifically remembered sexual content being detected/shut down very quickly and asked to go back to the old drift settings while keeping the clean modern graphics. They also asked that the SOS video start automatically when the intervention opens rather than requiring a Play click.
 

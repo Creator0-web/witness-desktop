@@ -145,9 +145,23 @@ one-screen preview into the character/emotional-reward phase:
   fixed the black-rectangle/old-table look visible in the first Windows Qt
   screenshot; do not reintroduce per-label opaque backgrounds unless a specific
   component needs one.
+- **v7.57.3 reset/branding contract:** Layer 1 is unchanged from the now-Windows-validated v7.57.2
+  rapid protection behavior. Factory Reset remains a next-launch operation but the restart helper must
+  wait for the old WITNESS PID to exit before relaunch, and `_apply_pending_factory_reset()` must never
+  consume the reset marker unless every reset-scoped file/directory is actually gone. The next DB/game
+  initialization is verified at Level 1 / 0 rating. Native application branding lives under
+  `ui_qt/assets/branding/`; the `.ico` is embedded by PyInstaller, used by Inno Setup, set as the Qt app
+  icon, and paired with the lightweight triangle mark in the top bar. Branding is presentation only.
+- **v7.57.2 rapid protection correction:** after real Windows testing showed that the restored adaptive
+  ScreenVision still left multi-minute blind windows, the user explicitly authorized Layer-1 changes.
+  `core/vision.py` now scans any supported foreground browser on a rapid cadence (20s normal, 15s
+  danger), starts after ~3s, never skips pixels based on a nominally safe page title, and confirms a
+  first visual FLAG again after ~4s. It exposes visible diagnostics instead of swallowing API failures.
+  `core/nuclear.py` browser shutdown is also hardened with taskkill process-tree termination plus a
+  psutil fallback. The modern Qt intervention/video UI remains the delivery surface.
 - **v7.57.1 protection parity correction:** Qt starts both the unchanged `core/tracker.py`
   active-window tracker and the unchanged `core/vision.py` ScreenVision guard through
-  `ui_qt/protection_runtime.py`. This restores the legacy full-runtime distinction between title-based
+  `ui_qt/protection_runtime.py`. This restored the legacy full-runtime distinction between title-based
   red-line detection and actual screenshot/vision detection of sexual or suggestive screen content.
   ScreenVision keeps its original adaptive trust cadence, two-consecutive-FLAG confirmation, incident
   history and prompt; Qt only supplies the callback. Confirmed red-lines reuse unchanged

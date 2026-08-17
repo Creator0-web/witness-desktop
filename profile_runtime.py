@@ -24,7 +24,6 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-import tempfile
 import time
 import traceback
 import uuid
@@ -488,45 +487,73 @@ def stage_backup_restore(archive) -> dict:
 
 
 def _apply_pending_factory_reset(target: Path) -> dict | None:
+    """Apply a staged reset *before* any WITNESS database is opened.
+
+    Windows can keep ``witness.db`` locked for a short period while the old
+    process is exiting.  Older reset code swallowed unlink failures and then
+    deleted the reset marker anyway, which could leave the previous Level/XP
+    database intact while reporting that reset had succeeded.  Reset is now
+    fail-safe: retry briefly, verify every reset target is actually gone, and
+    keep the marker if anything remains so a later launch can try again.
+    """
     marker = target / PENDING_RESET_FILE
     payload = _read_json(marker, {})
     if not isinstance(payload, dict) or not payload.get("requested_at"):
         return None
-    removed = []
+
     try:
-        # A staged import and a staged reset must never race; reset wins.
-        try:
-            (target / PENDING_IMPORT_FILE).unlink(missing_ok=True)
-        except Exception:
-            pass
+        (target / PENDING_IMPORT_FILE).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    removed: set[str] = set()
+    attempts = 24
+    for attempt in range(attempts):
         for name in FACTORY_RESET_FILES:
             path = target / name
-            if path.exists():
-                try:
-                    path.unlink()
-                    removed.append(name)
-                except Exception:
-                    pass
+            if not path.exists():
+                continue
+            try:
+                path.unlink()
+                removed.add(name)
+            except Exception:
+                pass
         for name in FACTORY_RESET_DIRS:
             path = target / name
-            if path.exists() and path.is_dir():
-                try:
-                    shutil.rmtree(path)
-                    removed.append(name + "/")
-                except Exception:
-                    pass
-        return {
-            "applied": True,
-            "requested_at": payload.get("requested_at", ""),
-            "applied_at": _utc_now(),
-            "removed": removed,
-            "backup_path": payload.get("backup_path", ""),
-        }
-    finally:
-        try:
+            if not path.exists():
+                continue
+            try:
+                shutil.rmtree(path)
+                removed.add(name + "/")
+            except Exception:
+                pass
+
+        remaining_files = [name for name in FACTORY_RESET_FILES if (target / name).exists()]
+        remaining_dirs = [name + "/" for name in FACTORY_RESET_DIRS if (target / name).exists()]
+        remaining = remaining_files + remaining_dirs
+        if not remaining:
+            result = {
+                "applied": True,
+                "requested_at": payload.get("requested_at", ""),
+                "applied_at": _utc_now(),
+                "removed": sorted(removed),
+                "backup_path": payload.get("backup_path", ""),
+            }
             marker.unlink(missing_ok=True)
-        except Exception:
-            pass
+            return result
+        if attempt < attempts - 1:
+            time.sleep(0.25)
+
+    # Never consume the marker when a reset target survived.  Persist only
+    # diagnostic metadata; the next launch will retry the exact same reset.
+    payload["last_attempt_at"] = _utc_now()
+    payload["remaining"] = remaining
+    _write_json_atomic(marker, payload)
+    raise RuntimeError(
+        "Factory reset could not clear the previous WITNESS profile yet: "
+        + ", ".join(remaining)
+        + ". Close every WITNESS window and launch it again; the reset marker was preserved."
+    )
 
 
 def stage_factory_reset() -> dict:
@@ -559,28 +586,50 @@ def pending_factory_reset() -> dict | None:
 
 
 def schedule_app_restart(delay_seconds=2) -> bool:
-    """Start a tiny Windows helper that reopens WITNESS after this process exits."""
+    """Reopen WITNESS only after the current process has fully exited.
+
+    A fixed delay is not sufficient on Windows when SQLite/protection threads
+    are still unwinding.  The detached PowerShell helper explicitly waits for
+    this PID to disappear before starting the reset launch, preventing the new
+    process from racing the old process for ``witness.db``.
+    """
     if os.name != "nt":
         return False
-    delay = max(1, int(delay_seconds))
-    helper = Path(tempfile.gettempdir()) / "WITNESS" / "restart-witness.cmd"
-    helper.parent.mkdir(parents=True, exist_ok=True)
+    delay_ms = max(250, int(float(delay_seconds) * 1000))
+    parent_pid = os.getpid()
+
+    def ps_quote(value) -> str:
+        return "'" + str(value).replace("'", "''") + "'"
+
+    exe = Path(sys.executable).resolve()
     if getattr(sys, "frozen", False):
-        command = f'start "" "{Path(sys.executable).resolve()}" /reset\r\n'
+        start_cmd = (
+            f"Start-Process -FilePath {ps_quote(exe)} "
+            "-ArgumentList @('/reset')"
+        )
     else:
         source = app_dir() or Path(__file__).resolve().parent
-        entry = Path(source) / "qt_main.py"
-        command = f'start "" "{Path(sys.executable).resolve()}" "{entry.resolve()}" /reset\r\n'
-    body = (
-        "@echo off\r\n"
-        f"timeout /t {delay} /nobreak >nul\r\n"
-        + command +
-        'del "%~f0"\r\n'
+        entry = (Path(source) / "qt_main.py").resolve()
+        start_cmd = (
+            f"Start-Process -FilePath {ps_quote(exe)} "
+            f"-ArgumentList @({ps_quote(entry)}, '/reset')"
+        )
+
+    script = (
+        f"Wait-Process -Id {parent_pid} -ErrorAction SilentlyContinue; "
+        f"Start-Sleep -Milliseconds {delay_ms}; "
+        + start_cmd
     )
-    helper.write_text(body, encoding="utf-8")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    subprocess.Popen(["cmd.exe", "/d", "/c", str(helper)], creationflags=flags, close_fds=True)
-    return True
+    try:
+        subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+             "-ExecutionPolicy", "Bypass", "-Command", script],
+            creationflags=flags, close_fds=True,
+        )
+        return True
+    except Exception:
+        return False
 
 
 def start_session() -> dict:

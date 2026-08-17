@@ -97,6 +97,7 @@ class ProtectionRuntime(QObject):
     drift_checkin = Signal(str, str)
     redline_detected = Signal(str, str)
     redline_actions = Signal(dict)
+    diagnostics_changed = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -122,6 +123,9 @@ class ProtectionRuntime(QObject):
         self.lock_poll = QTimer(self)
         self.lock_poll.setInterval(60_000)
         self.lock_poll.timeout.connect(self._refresh_lock)
+        self.diag_poll = QTimer(self)
+        self.diag_poll.setInterval(2_000)
+        self.diag_poll.timeout.connect(self._emit_diagnostics)
 
     @property
     def running(self) -> bool:
@@ -153,9 +157,11 @@ class ProtectionRuntime(QObject):
             self._running = True
             self.poll.start()
             self.lock_poll.start()
+            self.diag_poll.start()
             self._refresh_lock()
+            self._emit_diagnostics()
             self.status_changed.emit(
-                "PROTECTION · ACTIVE · SCREEN GUARD" if vision_ready
+                "PROTECTION · ACTIVE · RAPID SCREEN GUARD" if vision_ready
                 else "PROTECTION · ACTIVE · TITLE ONLY",
                 True,
             )
@@ -167,7 +173,27 @@ class ProtectionRuntime(QObject):
         self.state["stop"] = True
         self.poll.stop()
         self.lock_poll.stop()
+        self.diag_poll.stop()
         self._running = False
+
+
+    def _emit_diagnostics(self) -> None:
+        snap = {
+            "running": bool(self._running),
+            "screen_guard": bool(self.screen_vision is not None),
+            "status": str(self.state.get("vision_status", "TITLE ONLY")),
+            "last_scan": float(self.state.get("vision_last_scan", 0.0) or 0.0),
+            "last_result": str(self.state.get("vision_last_result", "WAITING") or "WAITING"),
+            "last_error": str(self.state.get("vision_last_error", "") or ""),
+            "scans_today": int(self.state.get("vision_scans_today", 0) or 0),
+            "current_app": str(self.state.get("current_app", "") or ""),
+            "current_title": str(self.state.get("current_title", "") or ""),
+        }
+        self.diagnostics_changed.emit(snap)
+
+    def test_redline_response(self) -> None:
+        """Manual end-to-end response test. Intentionally closes supported browsers."""
+        self._request_redline("manual-test", "Manual protection response test")
 
     def _refresh_lock(self) -> None:
         # Polling is important after a restart: the legacy blocker timer lived in

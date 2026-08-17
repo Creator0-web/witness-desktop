@@ -37,18 +37,44 @@ REDIRECTS = [
 
 
 def kill_browsers():
-    """Kill all running browser processes immediately."""
+    """Force-close supported browsers immediately.
+
+    Primary path uses Windows taskkill with the process tree flag. A psutil
+    fallback catches cases where taskkill returns unexpectedly. This is an
+    intentionally hard red-line response: it closes the browser, not merely
+    the currently visible tab.
+    """
     killed = []
+    wanted = {name.lower() for name in BROWSER_PROCESSES}
     for proc in BROWSER_PROCESSES:
         try:
             result = subprocess.run(
-                ["taskkill", "/f", "/im", proc],
+                ["taskkill", "/f", "/t", "/im", proc],
                 capture_output=True, timeout=5,
                 creationflags=0x08000000)
             if result.returncode == 0:
                 killed.append(proc.replace(".exe", ""))
         except Exception:
             pass
+
+    # Belt-and-suspenders fallback. Browser processes normally belong to the
+    # current Windows account, so this does not require the hosts-file admin
+    # permission used by blocker.py.
+    try:
+        import psutil
+        for p in psutil.process_iter(["name"]):
+            try:
+                name = (p.info.get("name") or "").lower()
+                if name not in wanted:
+                    continue
+                p.kill()
+                label = name.replace(".exe", "")
+                if label not in killed:
+                    killed.append(label)
+            except Exception:
+                continue
+    except Exception:
+        pass
     return killed
 
 

@@ -28,6 +28,7 @@ CloseApplications=yes
 RestartApplications=no
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupLogging=yes
+SetupIconFile=..\ui_qt\assets\branding\witness.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

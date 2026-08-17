@@ -1,9 +1,9 @@
-"""WITNESS PySide6 desktop shell — v7.57.1 Full Screen Guard Restore + Auto SOS.
+"""WITNESS PySide6 desktop shell — v7.57.3 Factory Reset Reliability + Triangle Branding.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.
 The legacy main.py remains a fallback/reference UI. The Qt app now starts the frozen
-active-window tracker plus the legacy ScreenVision guard and delivers their protection through modern Qt surfaces. Both entry points now activate the same per-Windows-user data profile.
+active-window tracker plus the rapid ScreenVision guard and delivers their protection through modern Qt surfaces. Both entry points now activate the same per-Windows-user data profile.
 """
 import os
 import sys
@@ -19,6 +19,13 @@ for sub in ("core", "character", "shared", "_archive", "insight"):
 
 
 def main():
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("WITNESS.Desktop")
+        except Exception:
+            pass
+
     try:
         import secrets_store
         secrets_store.load_all()
@@ -39,7 +46,13 @@ def main():
             "WITNESS loaded the wrong database module from " + str(origin) +
             ". Missing canonical DB API: " + ", ".join(missing_db_api))
     db.init()
-    game_engine.initialize()
+    init_result = game_engine.initialize()
+    if PROFILE.get("factory_reset_applied"):
+        level = dict(init_result.get("level") or {})
+        if int(level.get("current_level", 1) or 1) != 1 or int(level.get("rating", 0) or 0) != 0:
+            raise RuntimeError(
+                "Factory reset verification failed: the new profile did not start at Level 1 / 0 XP."
+            )
 
     # Crash recovery is deliberately local and non-destructive: keep a session
     # marker, write a traceback on uncaught Python exceptions, and let the next
@@ -54,7 +67,9 @@ def main():
     profile_runtime.start_session()
 
     try:
+        from pathlib import Path
         from PySide6.QtCore import QTimer
+        from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
     except ImportError:
         print("PySide6 is not installed. Run install.bat, then try again.")
@@ -65,6 +80,10 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("WITNESS")
     app.setOrganizationName("WITNESS")
+    resource_root = Path(getattr(sys, "_MEIPASS", BASE))
+    icon_path = resource_root / "ui_qt" / "assets" / "branding" / "witness.ico"
+    if icon_path.is_file():
+        app.setWindowIcon(QIcon(str(icon_path)))
     app.aboutToQuit.connect(profile_runtime.end_session)
     smoke_test = "--smoke-test" in sys.argv
     win = WitnessMainWindow(start_protection=not smoke_test)

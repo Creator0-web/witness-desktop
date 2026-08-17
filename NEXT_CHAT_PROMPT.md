@@ -14,42 +14,35 @@ anything in it unless I explicitly say so in this conversation. DEVLOG.md is the
 read every entry because older decisions still apply.
 
 CURRENT FOCUS RIGHT NOW:
-**v7.57.1 / Qt build `2026-08-17-b` — Full Screen Guard Restore + Auto SOS** is the current source.
-The person liked the modern v7.57 intervention UI but immediately noticed protection felt slower than the
-old app. Audit confirmed v7.57.0 had restored only `WindowTracker` (process/title detection) and had NOT
-started the separate legacy `ScreenVision` thread that actively classified browser screenshots.
+**v7.57.3 / Qt build `2026-08-17-d` — Factory Reset Reliability + Triangle Branding** is the current source.
+The person reports that v7.57.2 drift detection is now working well, so **do not retune Layer 1 unless they
+explicitly ask again**. Their remaining Windows issues were: Factory Reset claimed success but the app still
+showed Lv.6 Operator, and the installed Windows app still looked like a generic Python application/icon.
 
-WHAT v7.57.1 CHANGES:
-- `core/` remains byte-for-byte frozen. Qt now starts both the unchanged `WindowTracker` and unchanged
-  `ScreenVision` through `ui_qt/protection_runtime.py`.
-- WindowTracker behavior is unchanged: foreground titles are sampled every 5s; `RED_LINE_KEYWORDS`
-  trigger red-line immediately (subject to its 120s duplicate cooldown); ordinary distracting titles use
-  the 0.5 / 2.5 / 4.5 / 6.5 minute drift ladder.
-- ScreenVision behavior is unchanged from the legacy full runtime: 45s startup delay; browser-only scan;
-  SAFE 300s / CAUTIOUS 90s / DANGER 30s adaptive cadence; incognito/private and browsers with >=3
-  incidents are DANGER; two consecutive FLAG classifications required; after the first FLAG, confirmation
-  is accelerated to about 10s. It captures the screen and sends it to Claude Vision using the configured
-  Anthropic key.
-- Confirmed vision red-lines use the same modern Qt browser-kill + 120-minute site-lock intervention.
-  The legacy hard-safe whitelist is preserved.
-- SOS intervention video now starts automatically once the dialog's video surface is visible, including
-  Settings preview. The button is `NEXT RESET VIDEO`, not an initial Play button.
-- Windows packaging now includes `anthropic`, Pillow/ImageGrab and `mss` for ScreenVision in addition to
-  psutil/pywin32/QtMultimedia.
-- Factory Reset from v7.57.0 is unchanged.
-- Camera/presence, phone detection, legacy voice/chat and PatternWatcher remain intentionally retired.
-- `shared/game_engine.py` and `shared/db.py` are unchanged.
+WHAT v7.57.3 CHANGES:
+- `profile_runtime.py`: fixes the Factory Reset race. The restart helper now waits for the current WITNESS PID
+  to fully exit before relaunching. `_apply_pending_factory_reset()` retries locked files, verifies all reset
+  targets are truly gone, and **keeps the reset marker** if anything remains instead of silently claiming success.
+- `qt_main.py`: after an applied factory reset, canonical game initialization is verified to be exactly Level 1
+  / 0 rolling rating. A failed reset can no longer quietly reopen as Operator.
+- `ui_qt/assets/branding/witness.ico` + `witness_icon.png`: new dark rounded-square WITNESS icon built around
+  a white ascent triangle with a restrained green inner Core mark.
+- `packaging/witness.spec` embeds the ICO into `WITNESS.exe` and bundles branding assets.
+- `packaging/WITNESS.iss` uses the same ICO for the installer; Qt sets the application/window icon and a Windows
+  AppUserModelID so taskbar/shortcut branding no longer falls back to generic Python.
+- `ui_qt/shell.py` + `theme.py`: top chrome gains a small triangle mark whose accent follows WILD/FORGED/NOIR.
+- `core/vision.py` and `core/nuclear.py` are **unchanged from v7.57.2**. Scoring/game semantics are unchanged.
 
 ACTUAL NEXT STEP ON WINDOWS/GITHUB:
-1. Publish/tag exactly `v7.57.1`; let GitHub Actions finish green and Update & Restart.
-2. Top bar should say **PROTECTION · ACTIVE · SCREEN GUARD**. If it says **TITLE ONLY**, first diagnose
-   missing Anthropic key/runtime rather than changing detection logic.
-3. Settings → Protection → Preview Intervention: first SOS video should auto-play without a click.
-4. Leave WITNESS open at least 45 seconds before judging ScreenVision because that startup delay is part of
-   the unchanged old implementation. Test with disposable browser tabs; confirmed red-lines intentionally
-   kill supported browsers.
-5. If the person still remembers reliably faster behavior than this v2 adaptive-trust code provides, inspect
-   prior historical source before changing `core/vision.py`; their remembered version may predate ScreenVision v2.
+1. Publish/tag exactly `v7.57.3`; wait for GitHub Actions green and use Update & Restart.
+2. Confirm desktop/Start/taskbar/title-bar branding uses the new triangle icon rather than generic Python.
+3. In Settings, run Factory Reset Progress again only after the automatic safety backup is created. The restart
+   should wait until the old process is gone; on reopen WITNESS must say **Lv.1 Wanderer** with **0 rolling XP**.
+4. Confirm Rapid Screen Guard still behaves exactly like v7.57.2. Do not change protection simply because this
+   release touched startup/reset/branding.
+5. If reset still does not produce Lv.1 / 0, capture the exact startup/reset error. v7.57.3 intentionally keeps
+   the pending reset marker on deletion failure, so there should now be an observable failure instead of a false
+   success.
 
 KNOWN LIMITATIONS / DO NOT HIDE:
 - Final Windows screenshot capture, Anthropic classification, QtMultimedia autoplay and browser taskkill

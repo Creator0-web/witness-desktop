@@ -46,11 +46,12 @@ class WitnessMainWindow(QMainWindow):
         top = QWidget()
         top.setObjectName("TopBar")
         th = QHBoxLayout(top); th.setContentsMargins(18, 9, 18, 9); th.setSpacing(8)
+        brand_mark = QLabel("△"); brand_mark.setObjectName("BrandMark")
         brand = QLabel("WITNESS"); brand.setObjectName("Brand")
         sub = QLabel("SELF-COMPETITION ARENA"); sub.setObjectName("Eyebrow")
         self.era_badge = QLabel(str(self._theme_tokens.get("label", "WILD ERA")))
         self.era_badge.setObjectName("EraBadge")
-        th.addWidget(brand); th.addWidget(sub); th.addSpacing(4); th.addWidget(self.era_badge); th.addStretch(1)
+        th.addWidget(brand_mark); th.addWidget(brand); th.addWidget(sub); th.addSpacing(4); th.addWidget(self.era_badge); th.addStretch(1)
         self.update_btn = QPushButton("")
         self.update_btn.setObjectName("Primary")
         self.update_btn.setVisible(False)
@@ -82,6 +83,7 @@ class WitnessMainWindow(QMainWindow):
         self.pages["arena"].request_page.connect(self.show_page)
         self.pages["arena"].changed.connect(self._on_arena_changed)
         self.pages["settings"].preview_protection.connect(self._preview_protection)
+        self.pages["settings"].test_redline.connect(self._test_redline_response)
 
         nav = QWidget()
         nav.setObjectName("BottomNav")
@@ -124,6 +126,7 @@ class WitnessMainWindow(QMainWindow):
         self.protection.drift_checkin.connect(self._on_drift_checkin)
         self.protection.redline_detected.connect(self._on_redline_detected)
         self.protection.redline_actions.connect(self._on_redline_actions)
+        self.protection.diagnostics_changed.connect(self._on_protection_diagnostics)
         self.drift_notice = DriftNotice(self)
         if start_protection:
             QTimer.singleShot(550, self.protection.start)
@@ -145,6 +148,19 @@ class WitnessMainWindow(QMainWindow):
         self.protection_badge.setProperty("active", bool(active))
         self.protection_badge.style().unpolish(self.protection_badge)
         self.protection_badge.style().polish(self.protection_badge)
+
+    def _on_protection_diagnostics(self, info):
+        try:
+            self.pages["settings"].set_protection_diagnostics(dict(info or {}))
+        except Exception:
+            pass
+        if not info or not info.get("screen_guard"):
+            return
+        status = str(info.get("status", ""))
+        if status == "ERROR":
+            self._on_protection_status("PROTECTION · SCREEN GUARD ERROR", False)
+        elif status in ("ACTIVE", "SCANNING", "STARTING"):
+            self._on_protection_status("PROTECTION · ACTIVE · RAPID SCREEN GUARD", True)
 
     def _on_drift_stage(self, stage, proc, title):
         if self._protection_dialog is not None and self._protection_dialog.isVisible():
@@ -182,6 +198,17 @@ class WitnessMainWindow(QMainWindow):
         dlg = self._protection_dialog
         if dlg is not None and dlg.isVisible() and getattr(dlg, "hard_lock", False):
             dlg.set_action_result(dict(result or {}))
+
+    def _test_redline_response(self):
+        answer = QMessageBox.warning(
+            self, "Test browser shutdown?",
+            "This is a REAL response test. WITNESS will force-close all supported browsers currently running and open the SOS intervention.\n\n"
+            "Save anything important first. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.protection.test_redline_response()
 
     def _preview_protection(self):
         self._open_protection_dialog(

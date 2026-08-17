@@ -1,11 +1,19 @@
 # WITNESS v2 — AI accountability coach
 
-> **v7.57.1 Full Screen Guard Restore + Auto SOS:** the modern Qt app now starts both pieces of the
-> proven protection path: the frozen active-window tracker and the frozen ScreenVision guard that
-> analyzes browser screenshots for sexual/suggestive content. Title-keyword red-lines still respond
-> immediately; vision red-lines retain the old adaptive trust cadence and two-confirmation logic, then
-> reuse the same browser shutdown + 120-minute lock response. The redesigned Qt intervention remains,
-> but its first local SOS video now starts automatically when the dialog opens. `core/` is unchanged.
+> **v7.57.3 Factory Reset Reliability + Triangle Branding:** Windows testing found that a staged
+> Factory Reset could restart the new process before the previous WITNESS process had fully released
+> `witness.db`, allowing the old Level state to survive. Reset now waits for the old PID to exit, retries
+> and verifies every reset target, preserves the reset marker on failure, and verifies the fresh game opens
+> at Level 1 / 0 rating. WITNESS also now has a real dark triangle application icon for the EXE, installer,
+> shortcuts/taskbar/title bar plus a matching evolving-accent triangle mark in the top chrome. Rapid Screen
+> Guard is intentionally unchanged from v7.57.2 because Windows testing says detection is working well.
+
+> **v7.57.2 Rapid Screen Guard + Verified Browser Shutdown:** real Windows testing showed the restored
+> legacy vision cadence was too slow for prevention. With explicit authorization, Layer 1 now starts
+> ScreenVision after ~3s, scans any supported foreground browser roughly every 15–20s, does not skip
+> nominally-safe page titles, and rechecks a first visual FLAG after ~4s. Confirmed red lines force-close
+> the supported browser process tree, attempt the 120-minute lock, and auto-start the modern SOS video.
+> Settings now exposes live scan/error diagnostics plus a real end-to-end Browser Shutdown test.
 
 > **v7.56.1 3D Control Feel + Live Update Checks:** Windows testing validated that the interactive
 > 3D concept feels good. Drag direction is now natural on both axes, sensitivity is reduced, and
@@ -149,9 +157,9 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.57.1
+### Current Qt state — v7.57.3
 
-The installed Qt app now runs the frozen active-window drift/red-line tracker **and** the legacy
+The installed Qt app runs the active-window drift/red-line tracker **and** the rapid
 ScreenVision browser guard while WITNESS is open. The top bar reports whether SCREEN GUARD is active;
 Settings can preview the redesigned intervention, which auto-starts the first SOS video, open the SOS
 video folder, and stage a safe backup-first progress reset. Confirmed red-lines force-close supported

@@ -1,12 +1,13 @@
-"""Screen vision v2 — adaptive trust-based scanning.
+"""Screen vision v3 — rapid browser screen guard.
 
-Trust levels per browser:
-  SAFE     = Chrome with blocker, known work apps. Scan every 5 min max.
-  CAUTIOUS = Browsers used for mixed purposes (Brave, Firefox). Scan every 90s.
-  DANGER   = Incognito/private mode, or browsers with incident history. Scan every 30s.
+The objective of this layer is prevention, not ordinary productivity nudging:
+while a supported browser is foreground, scan the visible screen quickly enough
+that sexual/explicit material cannot sit on screen for minutes before WITNESS
+reacts. WindowTracker still handles title-keyword red lines independently.
 
-Learns from history: if a browser has been flagged 3+ times, it moves
-to DANGER permanently. Cost-capped at MAX_SCANS_PER_DAY.
+The guard keeps the old two-FLAG confirmation to reduce false positives, but
+uses a short confirmation delay and does not exempt nominally "safe" websites
+from pixel scanning. A normal work page should be classified SAFE from pixels.
 """
 import threading
 import time
@@ -31,12 +32,15 @@ DEFAULT_TRUST = {
     "vivaldi.exe": "cautious",
 }
 
-# scan intervals by trust level (seconds)
+# Rapid protection cadence. Trust is still recorded for incident history, but
+# no supported browser is allowed a multi-minute blind window anymore.
 SCAN_INTERVALS = {
-    "safe": 300,      # every 5 minutes
-    "cautious": 90,   # every 90 seconds
-    "danger": 30,     # every 30 seconds
+    "safe": 20,
+    "cautious": 20,
+    "danger": 15,
 }
+STARTUP_DELAY_SEC = 3
+CONFIRM_DELAY_SEC = 4
 
 # incognito/private window indicators
 PRIVATE_INDICATORS = [
@@ -44,7 +48,9 @@ PRIVATE_INDICATORS = [
     "private window", "private tab",
 ]
 
-# safe title keywords — skip scanning entirely
+# Legacy safe-title vocabulary retained for compatibility/history only.
+# v3 intentionally does NOT skip these titles: pixel protection must still work
+# if explicit material appears inside a normally-safe site.
 SAFE_TITLES = [
     "google docs", "google sheets", "google drive", "gmail",
     "booking koala", "vonage", "thumbtack", "calendar",
@@ -63,7 +69,7 @@ SAFE_TITLES = [
 ]
 
 # cost protection
-MAX_SCANS_PER_DAY = 200     # hard cap: ~$2-3/day max
+MAX_SCANS_PER_DAY = 1500    # rapid mode; only foreground browser time consumes scans
 HISTORY_FILE = "vision_history.json"
 INCIDENT_THRESHOLD = 3       # flags before browser moves to DANGER
 
@@ -78,6 +84,11 @@ class ScreenVision(threading.Thread):
         self.last_scan = 0
         self.browser_incidents = self._load_history()
         self.consecutive_flags = 0  # need 2 in a row to trigger
+        self.state["vision_status"] = "STARTING"
+        self.state["vision_last_scan"] = 0.0
+        self.state["vision_last_result"] = "WAITING"
+        self.state["vision_last_error"] = ""
+        self.state["vision_scans_today"] = 0
 
     def _load_history(self):
         """Load incident counts per browser."""
@@ -119,13 +130,15 @@ class ScreenVision(threading.Thread):
         return any(safe in title_lower for safe in SAFE_TITLES)
 
     def run(self):
-        time.sleep(45)  # startup delay
+        time.sleep(STARTUP_DELAY_SEC)
+        self.state["vision_status"] = "ACTIVE"
         while not self.state.get("stop"):
             try:
                 self._tick()
-            except Exception:
-                pass
-            time.sleep(5)  # check every 5s, but only scan per trust interval
+            except Exception as ex:
+                self.state["vision_status"] = "ERROR"
+                self.state["vision_last_error"] = str(ex)[:180]
+            time.sleep(1)  # cheap eligibility check; network scans obey intervals above
 
     def _tick(self):
         # reset daily counter
@@ -148,9 +161,9 @@ class ScreenVision(threading.Thread):
         if not self._is_browser(app):
             return
 
-        # skip safe titles (work tools, music)
-        if self._is_safe_title(title):
-            return
+        # Do not skip pixels based on page title. The previous adaptive guard could
+        # leave Chrome/work/social pages unscanned for minutes or forever; that is
+        # incompatible with rapid red-line protection.
 
         # get trust level and check interval
         trust = self._get_trust(app, title)
@@ -163,12 +176,24 @@ class ScreenVision(threading.Thread):
         # time to scan
         self.last_scan = now
         self.scans_today += 1
+        self.state["vision_status"] = "SCANNING"
+        self.state["vision_last_scan"] = now
+        self.state["vision_scans_today"] = self.scans_today
 
         screenshot_b64 = self._capture()
         if not screenshot_b64:
+            self.state["vision_status"] = "ERROR"
+            self.state["vision_last_result"] = "CAPTURE ERROR"
+            self.state["vision_last_error"] = "Could not capture the active screen."
             return
 
         is_nsfw = self._analyze(screenshot_b64)
+        if is_nsfw is None:
+            return
+
+        self.state["vision_status"] = "ACTIVE"
+        self.state["vision_last_result"] = "FLAG" if is_nsfw else "SAFE"
+        self.state["vision_last_error"] = ""
 
         if is_nsfw:
             self.consecutive_flags += 1
@@ -181,8 +206,10 @@ class ScreenVision(threading.Thread):
                 db.log_redline(f"VISION [{trust}]: {title[:60]}")
                 self.trigger_nuclear(app, title)
                 self.consecutive_flags = 0
-            # else: single flag, scan again sooner to confirm
-            self.last_scan = time.time() - (SCAN_INTERVALS[trust] - 10)
+            # Single flag: confirm quickly. This keeps the old two-FLAG safety
+            # while keeping total response comfortably below the old multi-minute
+            # blind windows.
+            self.last_scan = time.time() - (SCAN_INTERVALS[trust] - CONFIRM_DELAY_SEC)
         else:
             self.consecutive_flags = 0
 
@@ -269,5 +296,10 @@ class ScreenVision(threading.Thread):
             answer = response.content[0].text.strip().upper()
             return "FLAG" in answer
 
-        except Exception:
-            return False
+        except Exception as ex:
+            # A failed API request must not masquerade as a SAFE screen. Surface it
+            # to the Qt protection badge/settings so detection failures are visible.
+            self.state["vision_status"] = "ERROR"
+            self.state["vision_last_result"] = "API ERROR"
+            self.state["vision_last_error"] = str(ex)[:180]
+            return None

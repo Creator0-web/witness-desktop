@@ -1,19 +1,18 @@
-# v7.57.1 Full Screen Guard Restore + Auto SOS
+# v7.57.3 Factory Reset Reliability + Triangle Branding
 
-Current Qt build: **v7.57.1 / `2026-08-17-b`**. Windows feedback showed that v7.57.0 restored only
-`core/tracker.py`, which preserved title-keyword red-lines but omitted the old `core/vision.py`
-ScreenVision guard. That omission made sexual/suggestive content without a red-line title behave like
-ordinary distraction instead of being actively classified from the screen.
+Current Qt build: **v7.57.3 / `2026-08-17-d`**. Windows testing now confirms the v7.57.2
+Rapid Screen Guard is working well. This patch therefore leaves Layer 1 unchanged and fixes Factory Reset
+restart/delete reliability plus native Windows branding. Prior testing of v7.57.1 showed that restoring
+ScreenVision was not enough: the legacy adaptive design still allowed 45s startup, Chrome SAFE=300s,
+CAUTIOUS=90s, and title-based pixel-scan bypasses. With explicit user authorization, `core/vision.py`
+now behaves as a rapid prevention guard: ~3s startup, ~20s normal / 15s danger scans on any supported
+foreground browser, no safe-title pixel bypass, and ~4s confirmation after a first FLAG.
 
-v7.57.1 starts the unchanged ScreenVision guard beside the unchanged WindowTracker. ScreenVision keeps
-its original adaptive trust intervals (safe 300s / cautious 90s / danger 30s), 45-second startup delay,
-two-consecutive-FLAG confirmation and 10-second confirmation rescan after a first flag. Confirmed vision
-red-lines enter the same modern Qt browser-kill/site-lock intervention. Camera/presence, phone detection,
-open-ended voice/chat and PatternWatcher remain retired.
-
-The redesigned intervention now auto-starts the first local SOS video after its native video surface is
-visible, including Settings preview. The button is now NEXT RESET VIDEO rather than requiring PLAY.
-Factory Reset behavior from v7.57.0 is unchanged.
+`core/nuclear.py` is also intentionally hardened: confirmed red lines use Windows taskkill process-tree
+termination plus a psutil fallback. Settings exposes live scan result/error/count data and includes a
+real Test Browser Shutdown control so response mechanics can be verified independently from AI detection.
+The redesigned intervention still auto-starts the first local SOS video. Factory Reset is unchanged.
+Camera/presence, phone detection, open-ended voice/chat and PatternWatcher remain retired.
 
 # v7.56.1 3D Control Feel + Live Update Checks
 
@@ -107,7 +106,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-17-b / v7.57.1 Full Screen Guard Restore + Auto SOS**
+Current Qt visual build: **2026-08-17-d / v7.57.3 Factory Reset Reliability + Triangle Branding**
 
 ## v7.57.1 protection/runtime bridge
 
