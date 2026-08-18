@@ -1,5 +1,19 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.58.1 Daily Video Recorder:** History → Calendar → Videos now has both **Record Video** and **Add File**.
+> The same local recording studio used for SOS clips can record Webcam + Mic, Screen + Mic, or Screen + Camera + Mic,
+> then **Submit to Day** attaches the accepted clip directly to the selected calendar date and refreshes the V marker.
+> The SOS recorder remains available in Settings → Protection. Rapid Screen Guard and scoring are unchanged.
+
+> **v7.58.0 SOS Recording Studio:** Settings → Protection now includes **Record SOS Video**.
+> WITNESS can record a local **Webcam + Mic**, **Screen + Mic**, or **Screen + Camera + Mic**
+> reset video, including a square or triangle webcam overlay in a chosen screen corner. Screen-mode
+> recording hides the studio, leaves a small always-on-top STOP controller, then returns to WITNESS
+> for Re-record or Submit. Submit moves the accepted file directly into the existing `sos_videos/`
+> library, so the modern intervention player can auto-start it. This is presentation-layer only; the
+> v7.57.2 rapid drift detector/browser shutdown and all scoring semantics are unchanged.
+
+
 > **v7.57.3 Factory Reset Reliability + Triangle Branding:** Windows testing found that a staged
 > Factory Reset could restart the new process before the previous WITNESS process had fully released
 > `witness.db`, allowing the old Level state to survive. Reset now waits for the old PID to exit, retries
@@ -157,12 +171,13 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.57.3
+### Current Qt state — v7.58.1
 
 The installed Qt app runs the active-window drift/red-line tracker **and** the rapid
 ScreenVision browser guard while WITNESS is open. The top bar reports whether SCREEN GUARD is active;
-Settings can preview the redesigned intervention, which auto-starts the first SOS video, open the SOS
-video folder, and stage a safe backup-first progress reset. Confirmed red-lines force-close supported
+Settings can record reset videos locally in three modes (Webcam + Mic, Screen + Mic, or Screen + Camera + Mic
+with a square/triangle corner overlay), preview the redesigned intervention that auto-starts the first SOS video,
+open the SOS video folder, and stage a safe backup-first progress reset. Confirmed red-lines force-close supported
 browsers and attempt the existing timed site lock.
 
 The approved responsive Arena/History/Progression/Character structure remains intact. v7.55.2 adds a self-cleaning GitHub Actions release checkout; the v7.55

@@ -14,35 +14,24 @@ anything in it unless I explicitly say so in this conversation. DEVLOG.md is the
 read every entry because older decisions still apply.
 
 CURRENT FOCUS RIGHT NOW:
-**v7.57.3 / Qt build `2026-08-17-d` — Factory Reset Reliability + Triangle Branding** is the current source.
-The person reports that v7.57.2 drift detection is now working well, so **do not retune Layer 1 unless they
-explicitly ask again**. Their remaining Windows issues were: Factory Reset claimed success but the app still
-showed Lv.6 Operator, and the installed Windows app still looked like a generic Python application/icon.
+**v7.58.1 / Qt build `2026-08-18-b` — Daily Video Recorder** is the current source.
+The person clarified that the recorder is most valuable for repeated **daily calendar videos**, not just long-lived SOS videos. v7.58.0 SOS recording remains available, but the same capture engine is now reused in History. Rapid Screen Guard is working well and must stay frozen unless explicitly requested.
 
-WHAT v7.57.3 CHANGES:
-- `profile_runtime.py`: fixes the Factory Reset race. The restart helper now waits for the current WITNESS PID
-  to fully exit before relaunching. `_apply_pending_factory_reset()` retries locked files, verifies all reset
-  targets are truly gone, and **keeps the reset marker** if anything remains instead of silently claiming success.
-- `qt_main.py`: after an applied factory reset, canonical game initialization is verified to be exactly Level 1
-  / 0 rolling rating. A failed reset can no longer quietly reopen as Operator.
-- `ui_qt/assets/branding/witness.ico` + `witness_icon.png`: new dark rounded-square WITNESS icon built around
-  a white ascent triangle with a restrained green inner Core mark.
-- `packaging/witness.spec` embeds the ICO into `WITNESS.exe` and bundles branding assets.
-- `packaging/WITNESS.iss` uses the same ICO for the installer; Qt sets the application/window icon and a Windows
-  AppUserModelID so taskbar/shortcut branding no longer falls back to generic Python.
-- `ui_qt/shell.py` + `theme.py`: top chrome gains a small triangle mark whose accent follows WILD/FORGED/NOIR.
-- `core/vision.py` and `core/nuclear.py` are **unchanged from v7.57.2**. Scoring/game semantics are unchanged.
+WHAT v7.58.1 CHANGES:
+- History → Calendar → selected day → **VIDEOS** now shows **● Record Video** plus **+ Add File**.
+- Record Video opens the existing native Qt recorder with Webcam + Mic, Screen + Mic, and Screen + Camera + Mic (Square/Triangle corner overlay).
+- The calendar date is frozen when the recorder opens. After Stop, **Submit to Day** routes the clip through `video_memories.add_video(day, path)` so existing day folders, duplicate handling, video list and V marker remain canonical.
+- Existing Add File behavior remains; only its button label is clearer.
+- Settings → Protection keeps **Record SOS Video** and still submits to `sos_videos/`. Both destinations share one recorder implementation.
+- **No `core/` file changed. No XP/Ghost/Level/scoring backend changed.**
 
 ACTUAL NEXT STEP ON WINDOWS/GITHUB:
-1. Publish/tag exactly `v7.57.3`; wait for GitHub Actions green and use Update & Restart.
-2. Confirm desktop/Start/taskbar/title-bar branding uses the new triangle icon rather than generic Python.
-3. In Settings, run Factory Reset Progress again only after the automatic safety backup is created. The restart
-   should wait until the old process is gone; on reopen WITNESS must say **Lv.1 Wanderer** with **0 rolling XP**.
-4. Confirm Rapid Screen Guard still behaves exactly like v7.57.2. Do not change protection simply because this
-   release touched startup/reset/branding.
-5. If reset still does not produce Lv.1 / 0, capture the exact startup/reset error. v7.57.3 intentionally keeps
-   the pending reset marker on deletion failure, so there should now be an observable failure instead of a false
-   success.
+1. Publish/tag exactly `v7.58.1`; wait for GitHub Actions green and use Update & Restart.
+2. History → Calendar → choose today → Videos → Record Video. Test a short **Webcam + Mic** clip, Stop, Submit to Day. Confirm it appears immediately in the selected day and the calendar shows V.
+3. Test one short Screen + Mic recording and, if useful, Screen + Camera + Mic.
+4. Confirm **+ Add File** still imports an existing clip into the same day.
+5. Settings → Protection → confirm the existing SOS recorder still submits to SOS and Rapid Screen Guard remains unchanged.
+6. If recording hardware fails, capture the exact recorder/camera/screen error. Do not modify Layer 1 for a multimedia problem.
 
 KNOWN LIMITATIONS / DO NOT HIDE:
 - Final Windows screenshot capture, Anthropic classification, QtMultimedia autoplay and browser taskkill

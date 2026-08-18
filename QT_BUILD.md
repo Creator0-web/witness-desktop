@@ -1,3 +1,37 @@
+# v7.58.1 Daily Video Recorder
+
+Current Qt build: **v7.58.1 / `2026-08-18-b`**. The recorder introduced for SOS in v7.58.0 is now reused where it removes the most friction: **History → Calendar → Videos**.
+
+For any selected calendar day the Videos tab now exposes:
+
+- **● Record Video** — opens the native WITNESS recorder with Webcam + Mic, Screen + Mic, or Screen + Camera + Mic.
+- **+ Add File** — preserves the existing browse/import path for videos recorded elsewhere.
+- After recording, **Submit to Day** copies the accepted clip into the existing `video_memories/YYYY-MM-DD/` archive and refreshes the day list/calendar V marker.
+
+The selected date is frozen when the recorder opens so a recording cannot silently drift onto a different day. The SOS recorder remains in Settings → Protection and uses the same capture engine. No `core/` file, scoring rule, Factory Reset behavior, updater behavior, or 3D control changed.
+
+## Previous recorder base — v7.58.0
+
+Current Qt build: **v7.58.0 / `2026-08-18-a`**. Settings → Protection now has a native local
+recording studio for creating the exact SOS/reset videos used by the modern intervention player. It supports:
+
+- **Webcam + Mic** — camera preview inside the studio, direct audio/video recording.
+- **Screen + Mic** — selected display plus the default microphone.
+- **Screen + Camera + Mic** — selected display plus a live always-on-top webcam overlay; the overlay can
+  be **Square** or **Triangle** and placed in any corner.
+
+Screen modes hide the studio before encoding begins and keep a tiny STOP controller available while the user
+works in another application. On supported Windows capture paths WITNESS asks the OS to exclude that controller
+from the recording; failure to exclude it does not stop recording. After Stop, the person can Re-record or
+**Submit to SOS**. Accepted files are moved into the existing profile-local `sos_videos/` directory and are
+immediately available to the intervention player. Draft recordings stay in a temporary directory and are removed
+when discarded. No cloud upload or new account is involved.
+
+This release does **not** touch `core/`, Rapid Screen Guard, browser shutdown, XP/Ghost/Level semantics,
+Factory Reset, or the 3D interaction. Qt Multimedia was already a desktop dependency because the protection
+player uses it; no separate screen-recorder application is required by this implementation. Windows remains the
+definitive acceptance environment for webcam/microphone permissions, screen capture and encoder availability.
+
 # v7.57.3 Factory Reset Reliability + Triangle Branding
 
 Current Qt build: **v7.57.3 / `2026-08-17-d`**. Windows testing now confirms the v7.57.2
@@ -106,7 +140,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-17-d / v7.57.3 Factory Reset Reliability + Triangle Branding**
+Current Qt visual build: **2026-08-18-b / v7.58.1 Daily Video Recorder**
 
 ## v7.57.1 protection/runtime bridge
 

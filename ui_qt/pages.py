@@ -24,6 +24,7 @@ from . import audio, onboarding, theme
 from .protection_runtime import open_sos_folder, sos_videos
 from .widgets import card, clear_layout
 from .progression import ProgressionView
+from .sos_recorder import SOSRecorderDialog
 
 
 class SimplePage(QScrollArea):
@@ -74,10 +75,13 @@ def _set_item(table, row, col, text, color=None, align=None):
 class DayDetailPanel(QFrame):
     """Rich Qt view of one calendar day using existing local storage."""
 
+    media_changed = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("CardStrong")
         self.day = None
+        self._daily_recorder = None
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 14, 16, 16)
         outer.setSpacing(10)
@@ -165,10 +169,13 @@ class DayDetailPanel(QFrame):
         lay = QVBoxLayout(self.videos_tab)
         lay.setContentsMargins(12, 12, 12, 12); lay.setSpacing(9)
         top = QHBoxLayout()
-        intro = QLabel("Attach real videos to this day. Files stay local inside WITNESS history.")
+        intro = QLabel("Capture a quick daily video here, or attach an existing file. Everything stays local inside WITNESS history.")
         intro.setObjectName("Secondary"); intro.setWordWrap(True)
         top.addWidget(intro, 1)
-        add = QPushButton("+ ADD VIDEO"); add.setObjectName("Primary")
+        record = QPushButton("● RECORD VIDEO"); record.setObjectName("Primary")
+        record.clicked.connect(self.record_video)
+        top.addWidget(record)
+        add = QPushButton("+ ADD FILE")
         add.clicked.connect(self.add_video)
         top.addWidget(add)
         lay.addLayout(top)
@@ -355,8 +362,33 @@ class DayDetailPanel(QFrame):
         try:
             video_memories.add_video(self.day.isoformat(), path)
             self.refresh()
+            self.media_changed.emit()
         except Exception as ex:
             QMessageBox.critical(self, "Video error", str(ex))
+
+    def record_video(self):
+        if not self.day:
+            return
+        if self._daily_recorder is not None and self._daily_recorder.isVisible():
+            self._daily_recorder.raise_()
+            self._daily_recorder.activateWindow()
+            return
+        day_string = self.day.isoformat()
+        dlg = SOSRecorderDialog(self, destination="daily", target_day=day_string)
+        self._daily_recorder = dlg
+        dlg.saved.connect(self._daily_video_saved)
+        dlg.finished.connect(lambda _=0, d=dlg: self._clear_daily_recorder(d))
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _daily_video_saved(self, _path):
+        self.refresh()
+        self.media_changed.emit()
+
+    def _clear_daily_recorder(self, dialog):
+        if self._daily_recorder is dialog:
+            self._daily_recorder = None
 
     def open_video(self, path):
         try:
@@ -411,6 +443,7 @@ class CalendarPage(SimplePage):
         cal.addWidget(self.grid_card)
 
         self.detail = DayDetailPanel()
+        self.detail.media_changed.connect(self.refresh)
         cal.addWidget(self.detail)
         cal.addStretch(1)
         self.layout_.addWidget(self.calendar_container)
@@ -597,6 +630,7 @@ class InsightsPage(SimplePage):
 class SettingsPage(SimplePage):
     preview_protection = Signal()
     test_redline = Signal()
+    record_sos = Signal()
 
     def __init__(self, parent=None):
         super().__init__("Settings", parent,
@@ -662,15 +696,17 @@ class SettingsPage(SimplePage):
         prd = QLabel(
             "Rapid Screen Guard watches the pixels of any supported foreground browser rather than trusting the site title. "
             "It scans on a fast cadence and confirms a visual FLAG within seconds; a confirmed red line force-closes supported "
-            "browsers and attempts a 120-minute site lock. SOS video starts automatically in the intervention screen."
+            "browsers and attempts a 120-minute site lock. Record your own reset video directly in WITNESS — webcam, screen + mic, "
+            "or screen + camera — and the SOS player will start it automatically during an intervention."
         )
         prd.setWordWrap(True); prd.setObjectName("Secondary")
         self.protection_status_label = QLabel(""); self.protection_status_label.setObjectName("Muted")
         prrow = QHBoxLayout()
+        record_sos = QPushButton("● Record SOS Video"); record_sos.setObjectName("Primary"); record_sos.clicked.connect(self.record_sos.emit)
         open_sos = QPushButton("Open SOS Video Folder"); open_sos.clicked.connect(self.open_sos_videos)
         preview = QPushButton("Preview Intervention"); preview.clicked.connect(self.preview_protection.emit)
         test_kill = QPushButton("Test Browser Shutdown"); test_kill.setObjectName("Danger"); test_kill.clicked.connect(self.test_redline.emit)
-        prrow.addWidget(open_sos); prrow.addWidget(preview); prrow.addWidget(test_kill); prrow.addStretch(1)
+        prrow.addWidget(record_sos); prrow.addWidget(open_sos); prrow.addWidget(preview); prrow.addWidget(test_kill); prrow.addStretch(1)
         prl.addWidget(prh); prl.addWidget(prd); prl.addWidget(self.protection_status_label); prl.addLayout(prrow)
         self.layout_.addWidget(protection)
 

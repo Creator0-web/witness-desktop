@@ -14,6 +14,7 @@ from .arena import ArenaPage
 from .character_page import CharacterPage
 from .pages import CalendarPage, InsightsPage, RecordsPage, SettingsPage
 from .protection_runtime import DriftNotice, ProtectionDialog, ProtectionRuntime
+from .sos_recorder import SOSRecorderDialog
 from .update_service import UpdateService
 from app_version import BUILD_TAG, DISPLAY_VERSION
 import update_manager
@@ -38,6 +39,7 @@ class WitnessMainWindow(QMainWindow):
         self._available_update = None
         self._last_update_check = 0.0
         self._protection_dialog = None
+        self._sos_recorder = None
 
         central = QWidget(); self.setCentralWidget(central)
         outer = QVBoxLayout(central)
@@ -84,6 +86,7 @@ class WitnessMainWindow(QMainWindow):
         self.pages["arena"].changed.connect(self._on_arena_changed)
         self.pages["settings"].preview_protection.connect(self._preview_protection)
         self.pages["settings"].test_redline.connect(self._test_redline_response)
+        self.pages["settings"].record_sos.connect(self._record_sos_video)
 
         nav = QWidget()
         nav.setObjectName("BottomNav")
@@ -214,6 +217,24 @@ class WitnessMainWindow(QMainWindow):
         self._open_protection_dialog(
             "preview", "Protection screen preview · no browser will be closed",
             hard_lock=False, preview=True)
+
+    def _record_sos_video(self):
+        if self._sos_recorder is not None and self._sos_recorder.isVisible():
+            self._sos_recorder.raise_(); self._sos_recorder.activateWindow()
+            return
+        dlg = SOSRecorderDialog(self)
+        self._sos_recorder = dlg
+        dlg.saved.connect(lambda _path: self.pages["settings"].refresh())
+        dlg.finished.connect(lambda _=0, d=dlg: self._clear_sos_recorder(d))
+        dlg.show(); dlg.raise_(); dlg.activateWindow()
+
+    def _clear_sos_recorder(self, dialog):
+        if self._sos_recorder is dialog:
+            self._sos_recorder = None
+        try:
+            self.pages["settings"].refresh()
+        except Exception:
+            pass
 
     def shutdown(self):
         try:

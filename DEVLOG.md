@@ -53,6 +53,54 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-18 -- v7.58.1 Daily Video Recorder
+Requested by: person clarified that the native recorder is most useful for repeated **daily videos in History → Calendar**, because recording several short clips elsewhere and browsing/uploading each file is tedious. They want the SOS recorder left in place, and they explicitly want the normal file-add path preserved alongside recording.
+
+Touched:
+- `ui_qt/sos_recorder.py`: generalized the v7.58.0 capture studio so the exact same Webcam + Mic / Screen + Mic / Screen + Camera + Mic engine can submit either to the existing SOS library or to one frozen calendar day. Daily mode changes the copy/title/status/button language to **Daily Video Memory / Submit to Day** and routes accepted clips through canonical `video_memories.add_video(day, path)`. SOS mode remains behaviorally intact.
+- `ui_qt/pages.py`: History → Calendar → selected day → VIDEOS now shows **● Record Video** and **+ Add File**. Record opens the shared modeless studio for that selected date. On save the day detail refreshes and emits a media-change signal so the calendar's V marker refreshes immediately. Existing file-import logic remains.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.58.1 / `2026-08-18-b`.
+
+Did NOT touch: **no file under `core/` was modified**. Rapid Screen Guard/browser shutdown remains frozen because the person reported it is working well. Also did NOT change `shared/game_engine.py`, `shared/db.py`, Factory Reset, updater behavior, Character/3D controls, or scoring semantics. `shared/video_memories.py` remains the canonical day-video storage implementation and was reused rather than rewritten.
+
+What changed and why:
+Daily clips are a high-frequency workflow, so file-picker friction matters much more there than for a long-lived SOS reset video. Reusing one recorder avoids two multimedia stacks and keeps the UI consistent. The selected ISO day is captured at recorder launch so the clip destination cannot change merely because the calendar UI changes in the background. **Add File** stays available for phone/external recordings.
+
+Validation:
+- Updated Python files compile successfully in the Linux worktree.
+- Daily submission is routed through the existing `video_memories.add_video()` path rather than inventing a new archive format.
+- Windows webcam/microphone/screen capture still requires acceptance testing on the installed GitHub build; the sandbox has no Windows capture devices.
+
+Left for next session:
+Publish/tag `v7.58.1`. On Windows record a short webcam daily clip, submit it to the selected day, confirm it appears immediately and that the calendar gains a V marker. Test Add File once and confirm Settings → Protection SOS recording still works. Do not retune Layer 1 while validating multimedia/history behavior.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
+## 2026-08-18 -- v7.58.0 local SOS Recording Studio
+Requested by: person asked to make SOS-video creation native to WITNESS instead of requiring files to be recorded elsewhere and copied into the folder. They specifically requested a Record button with three practical modes: webcam video, screen + microphone, and screen + microphone with a small live webcam view in a corner, with a square or WITNESS-style triangle option, followed by a simple Submit flow.
+
+Touched:
+- `ui_qt/sos_recorder.py` **(new)**: native local recording studio built on the existing PySide6/Qt Multimedia stack. Supports **Webcam + Mic**, **Screen + Mic**, and **Screen + Camera + Mic**. Screen/camera mode places a real always-on-top webcam preview on the selected display so the screen capture records the composition; webcam shape is Square or Triangle and corner is selectable. Screen modes hide the studio before encoding begins and leave a compact STOP controller. On Windows the controller requests `WDA_EXCLUDEFROMCAPTURE` as a best-effort capture exclusion; recording does not depend on that succeeding. Drafts are stored in an OS temp directory. Stop returns to the studio for Re-record or Submit; Submit moves the accepted recording into profile-local `sos_videos/`, where the existing intervention player already discovers it.
+- `ui_qt/pages.py`: Settings → Protection gains **● Record SOS Video** and updated copy explaining native recording. Existing Open Folder, Preview Intervention and real Browser Shutdown test remain.
+- `ui_qt/shell.py`: launches one modeless recorder studio at a time and refreshes Settings after a recording is saved. Modeless delivery is deliberate: the independent screen-record STOP controller must remain clickable while the studio is hidden and the user works in another app.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.58.0 / `2026-08-18-a`.
+
+Did NOT touch: **no file under `core/` was modified**. The person had just confirmed drift detection is working well, so the v7.57.2 rapid ScreenVision cadence/browser shutdown behavior remains frozen. Also did NOT change `shared/game_engine.py`, `shared/db.py`, Factory Reset semantics, Character/3D controls, updater behavior or scoring.
+
+What changed and why:
+SOS reset videos are more useful if they can be created in the moment without leaving WITNESS to set up another recorder. Qt Multimedia is already part of the desktop package for playback, and the current Qt stack can route camera or screen video plus microphone audio into `QMediaRecorder`. The combined mode intentionally avoids adding a second compositor/game engine: WITNESS places the webcam preview on the selected screen and records the resulting screen pixels. This also makes the requested square/triangle corner treatment visible exactly as the user sees it while recording.
+
+Validation:
+- New recorder, Settings integration and shell integration pass Python compile/AST checks in the Linux worktree.
+- Release-source validator passes after cleanup.
+- `core/` hash comparison against v7.57.3 confirms no Layer-1 file changed; `shared/game_engine.py` and `shared/db.py` are also unchanged.
+- The sandbox does not have the Windows Qt Multimedia runtime/camera devices, so actual webcam permissions, microphone input, screen capture, encoder/container selection and Windows capture-exclusion behavior require the GitHub Windows build. This must be treated as an acceptance test rather than falsely claimed as proven here.
+
+Left for next session:
+Publish/tag `v7.58.0`. On Windows open Settings → Protection → Record SOS Video and test all three modes. For Webcam + Mic: record, Stop, Submit, then Preview Intervention and confirm it auto-plays. For Screen + Mic: confirm the selected display and microphone are present. For Screen + Camera + Mic: test both Square and Triangle overlays and at least one alternate corner. Confirm the small STOP controller remains clickable; ideally it is excluded from the recorded output. Finally confirm Rapid Screen Guard still behaves exactly like v7.57.3. If any capture mode fails, capture the exact on-screen recorder error rather than changing Layer 1.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-17 -- v7.57.3 factory-reset reliability + native triangle branding
 Requested by: person reported that after using Factory Reset the installed app still showed **Lv.6 Operator**, while also confirming that v7.57.2 drift detection is now working well. They also asked for basic Windows-app graphics because the executable still looked like a generic Python application, specifically suggesting a triangle.
 

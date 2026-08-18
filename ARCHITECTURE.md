@@ -145,6 +145,15 @@ one-screen preview into the character/emotional-reward phase:
   fixed the black-rectangle/old-table look visible in the first Windows Qt
   screenshot; do not reintroduce per-label opaque backgrounds unless a specific
   component needs one.
+- **v7.58.1 Daily Video Recorder contract:** the v7.58.0 recorder is a shared local capture surface, not an SOS-only subsystem. `DayDetailPanel` may open it with a frozen ISO calendar date; **Submit to Day** must route the accepted temp file through the existing `shared/video_memories.py` archive so calendar storage/duplicate naming/V markers stay canonical. The Videos tab must retain **Add File** alongside **Record Video**. Settings → Protection keeps the SOS destination. This is downstream UI/storage work only; do not touch Rapid Screen Guard or scoring for recorder changes.
+- **v7.58.0 SOS Recording Studio contract:** `ui_qt/sos_recorder.py` is a presentation/delivery-layer
+  feature only. It may use Qt Multimedia to record the default webcam/microphone and a selected display, but it
+  must not change `core/` protection behavior. Accepted recordings are local files in the existing profile-relative
+  `sos_videos/` directory, which `ui_qt/protection_runtime.py` already reads. Screen + Camera uses a real
+  always-on-top webcam preview as part of the captured display, with Square/Triangle masks and selectable corners;
+  the separate STOP controller is best-effort excluded from Windows capture. Drafts live in an OS temp directory
+  until Submit, and discarded drafts are removed. Keep recorder UI modeless so the screen-mode STOP controller
+  remains interactive while the studio itself is hidden.
 - **v7.57.3 reset/branding contract:** Layer 1 is unchanged from the now-Windows-validated v7.57.2
   rapid protection behavior. Factory Reset remains a next-launch operation but the restart helper must
   wait for the old WITNESS PID to exit before relaunch, and `_apply_pending_factory_reset()` must never
