@@ -1,5 +1,7 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.58.2 Webcam A/V Sync:** Windows testing isolated a noticeable lip-sync offset to **Webcam + Mic only**; both screen-recording modes were already synchronized. Camera-only recording now lets Qt choose the source-native frame cadence and gives the webcam/driver/FFmpeg path a short 500 ms pre-roll before the recorder establishes its A/V timeline. Screen modes and Rapid Screen Guard are unchanged.
+>
 > **v7.58.1 Daily Video Recorder:** History → Calendar → Videos now has both **Record Video** and **Add File**.
 > The same local recording studio used for SOS clips can record Webcam + Mic, Screen + Mic, or Screen + Camera + Mic,
 > then **Submit to Day** attaches the accepted clip directly to the selected calendar date and refreshes the V marker.
@@ -171,7 +173,7 @@ Both frontends use the same WITNESS database/game backend. Do not run synthetic
 demo seeding/clearing simultaneously from both windows.
 
 
-### Current Qt state — v7.58.1
+### Current Qt state — v7.58.2
 
 The installed Qt app runs the active-window drift/red-line tracker **and** the rapid
 ScreenVision browser guard while WITNESS is open. The top bar reports whether SCREEN GUARD is active;

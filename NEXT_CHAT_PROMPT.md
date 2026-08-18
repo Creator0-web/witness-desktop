@@ -14,24 +14,21 @@ anything in it unless I explicitly say so in this conversation. DEVLOG.md is the
 read every entry because older decisions still apply.
 
 CURRENT FOCUS RIGHT NOW:
-**v7.58.1 / Qt build `2026-08-18-b` — Daily Video Recorder** is the current source.
-The person clarified that the recorder is most valuable for repeated **daily calendar videos**, not just long-lived SOS videos. v7.58.0 SOS recording remains available, but the same capture engine is now reused in History. Rapid Screen Guard is working well and must stay frozen unless explicitly requested.
+**v7.58.2 / Qt build `2026-08-18-c` — Webcam A/V Sync** is the current source.
+Windows testing of v7.58.1 isolated the recorder sync issue very cleanly: **Webcam + Mic has noticeable audio-behind-video lip sync; Screen + Mic and Screen + Camera + Mic are good.** Daily Calendar recording itself works great. Rapid Screen Guard is working well and stays frozen.
 
-WHAT v7.58.1 CHANGES:
-- History → Calendar → selected day → **VIDEOS** now shows **● Record Video** plus **+ Add File**.
-- Record Video opens the existing native Qt recorder with Webcam + Mic, Screen + Mic, and Screen + Camera + Mic (Square/Triangle corner overlay).
-- The calendar date is frozen when the recorder opens. After Stop, **Submit to Day** routes the clip through `video_memories.add_video(day, path)` so existing day folders, duplicate handling, video list and V marker remain canonical.
-- Existing Add File behavior remains; only its button label is clearer.
-- Settings → Protection keeps **Record SOS Video** and still submits to `sos_videos/`. Both destinations share one recorder implementation.
+WHAT v7.58.2 CHANGES:
+- Only the direct camera recorder path is tuned. Camera-only no longer forces exactly 30.0 fps; Qt is allowed to choose the optimal cadence from the camera source/codec.
+- Webcam + Mic now starts the camera, shows `SYNCING CAMERA + MICROPHONE…`, waits 500 ms, then calls recorder.record(). The recording timer starts only at record(), so the settle period is not part of the saved clip.
+- Screen + Mic and Screen + Camera + Mic remain on the already-good screen path and keep their existing behavior.
+- History → Calendar → Videos still has Record Video + Add File; Settings → Protection still has the SOS recorder.
 - **No `core/` file changed. No XP/Ghost/Level/scoring backend changed.**
 
 ACTUAL NEXT STEP ON WINDOWS/GITHUB:
-1. Publish/tag exactly `v7.58.1`; wait for GitHub Actions green and use Update & Restart.
-2. History → Calendar → choose today → Videos → Record Video. Test a short **Webcam + Mic** clip, Stop, Submit to Day. Confirm it appears immediately in the selected day and the calendar shows V.
-3. Test one short Screen + Mic recording and, if useful, Screen + Camera + Mic.
-4. Confirm **+ Add File** still imports an existing clip into the same day.
-5. Settings → Protection → confirm the existing SOS recorder still submits to SOS and Rapid Screen Guard remains unchanged.
-6. If recording hardware fails, capture the exact recorder/camera/screen error. Do not modify Layer 1 for a multimedia problem.
+1. Publish/tag exactly `v7.58.2`; wait for GitHub Actions green and Update & Restart.
+2. History → Calendar → today → Videos → Record Video → Webcam + Mic. Record 8–10 seconds while counting and clap once. Check whether the audio now lands with the mouth/clap.
+3. Regression-check one Screen + Mic clip and one Screen + Camera + Mic clip; those should remain synchronized.
+4. If webcam-only still has a stable constant offset, measure it approximately (for example ~0.2s / ~0.5s / ~1s). The next technical step should be explicit camera-frame timestamp compensation/custom QVideoFrameInput, not changes to screen capture or Layer 1.
 
 KNOWN LIMITATIONS / DO NOT HIDE:
 - Final Windows screenshot capture, Anthropic classification, QtMultimedia autoplay and browser taskkill

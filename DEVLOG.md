@@ -53,6 +53,28 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-08-18 -- v7.58.2 Webcam A/V Sync
+Requested by: person tested all three v7.58.1 daily-recorder modes and isolated the problem: **Screen + Camera + Mic is good, Screen + Mic is good, but Webcam + Mic has noticeable audio-behind-video lip sync.**
+
+Touched:
+- `ui_qt/sos_recorder.py`: camera-only recording now gives the direct webcam/driver/Qt-FFmpeg path a 500 ms settle period after `QCamera.start()` before `QMediaRecorder.record()` establishes the A/V timeline. Camera-only also stops forcing exactly 30.0 fps and uses Qt's documented `0.0` optimal/source-aware recorder frame-rate choice; the two already-synchronized screen modes keep the existing 30 fps setting and 280 ms screen repaint settle behavior. The recording timer starts only when `record()` begins, so the camera pre-roll is not saved into the clip.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.58.2 / `2026-08-18-c`.
+
+Did NOT touch: **no file under `core/` was modified**. Rapid Screen Guard/browser shutdown remains frozen and Windows-approved. Also did NOT change `shared/game_engine.py`, `shared/db.py`, Calendar video storage, SOS destination/storage, screen-recording composition, Factory Reset, Character/3D or updater semantics.
+
+What changed and why:
+The user's A/B test is strong evidence that the problem is the direct `QCamera + QAudioInput -> QMediaRecorder` path, not the microphone device, player, calendar storage or general recorder. Qt documents that recorder performance/timing depends on source format/hardware and that frame-rate 0 lets the recorder choose optimally from the source and codec. The two screen paths already had a settle period and were synchronized; camera-only cold-started the camera and recorder back-to-back. This pass applies the smallest camera-specific correction before escalating to a custom timestamp-compensation pipeline.
+
+Validation:
+- Updated source compiles/AST-parses locally.
+- Core and canonical scoring hashes are unchanged from v7.58.1.
+- Windows webcam A/V sync cannot be proven in the Linux sandbox; the person's clap/count test is authoritative.
+
+Left for next session:
+Publish/tag v7.58.2 and test Webcam + Mic with an 8–10 second count/clap clip. If lip sync is now good, freeze multimedia. If a stable constant offset remains, estimate its size; next escalation should be camera-frame timestamp compensation/custom `QVideoFrameInput` (Qt 6.8+) rather than touching the two good screen modes or Layer 1.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-18 -- v7.58.1 Daily Video Recorder
 Requested by: person clarified that the native recorder is most useful for repeated **daily videos in History → Calendar**, because recording several short clips elsewhere and browsing/uploading each file is tedious. They want the SOS recorder left in place, and they explicitly want the normal file-add path preserved alongside recording.
 

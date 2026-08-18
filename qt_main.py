@@ -1,4 +1,4 @@
-"""WITNESS PySide6 desktop shell — v7.58.1 Daily Video Recorder.
+"""WITNESS PySide6 desktop shell — v7.58.2 Webcam A/V Sync.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.

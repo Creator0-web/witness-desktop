@@ -44,7 +44,7 @@ For the provided same-repository flow:
 1. Put the clean WITNESS source in a GitHub repository.
 2. Commit the project, including `.github/workflows/release-windows.yml`.
 3. Ensure `app_version.VERSION` matches the release you are about to publish.
-4. Create/push tag matching `app_version.VERSION` (current release: `v7.58.1`).
+4. Create/push tag matching `app_version.VERSION` (current release: `v7.58.2`).
 5. GitHub Actions builds on Windows and creates a Release containing exactly:
    `WITNESS-Setup.exe` and `WITNESS-Setup.exe.sha256`.
 6. Give new users the Setup EXE from the latest published release.
@@ -54,7 +54,9 @@ slug in the packaged copy of `release_channel.json`. Development ZIPs keep the
 repository blank so they cannot accidentally self-update.
 
 
-### v7.58.1 multimedia acceptance check
+### v7.58.2 multimedia acceptance check
+
+For Webcam + Mic, record a short spoken/countdown + clap clip and verify mouth/clap sync after the new camera pre-roll/native-cadence correction. Screen + Mic and Screen + Camera + Mic are regression checks and should remain unchanged.
 
 The shared SOS/Daily Recording Studio uses the Qt Multimedia modules already packaged for the intervention video player. History → Calendar → Videos now reuses the same recorder and saves accepted clips directly to the selected day.
 Before publishing broadly, the Windows GitHub build should be acceptance-tested with the three local recording

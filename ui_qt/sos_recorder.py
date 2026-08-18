@@ -370,7 +370,7 @@ class SOSRecorderDialog(QDialog):
         self._preview_session = None
 
     # ---------- recording ----------
-    def _prepare_recorder(self):
+    def _prepare_recorder(self, mode=None):
         prefix = "witness-daily-recording-" if self._daily else "witness-sos-recording-"
         self._draft_dir = Path(tempfile.mkdtemp(prefix=prefix))
         self._session = QMediaCaptureSession(self)
@@ -403,8 +403,15 @@ class SOSRecorderDialog(QDialog):
         except Exception: pass
         try: self._recorder.setQuality(QMediaRecorder.Quality.HighQuality)
         except Exception: pass
-        try: self._recorder.setVideoFrameRate(30.0)
-        except Exception: pass
+        # Direct webcam capture is the only path that showed a stable A/V offset on
+        # Windows. Let Qt follow the camera's native cadence there instead of forcing
+        # 30.000 fps onto a device that may actually expose 29.97/30/60 fps. Screen
+        # capture keeps the proven 30 fps ceiling. Qt documents 0 as "optimal choice
+        # from the video source + codec".
+        try:
+            self._recorder.setVideoFrameRate(0.0 if mode == self.MODE_CAMERA else 30.0)
+        except Exception:
+            pass
         # Directory output lets Qt choose an extension matching the actual codec/container.
         self._recorder.setOutputLocation(QUrl.fromLocalFile(str(self._draft_dir.resolve())))
 
@@ -418,7 +425,7 @@ class SOSRecorderDialog(QDialog):
             return
         self._stop_camera_preview()
         try:
-            self._prepare_recorder()
+            self._prepare_recorder(mode)
             screen = self._selected_screen()
             if mode == self.MODE_CAMERA:
                 dev = self._default_camera_device()
@@ -443,7 +450,15 @@ class SOSRecorderDialog(QDialog):
             self.start_btn.hide(); self.rerecord_btn.hide(); self.submit_btn.setEnabled(False)
             if mode == self.MODE_CAMERA:
                 self.stop_btn.show()
-                self._begin_recording_now()
+                # Camera-only used to call recorder.record() immediately after
+                # QCamera.start(). On the tested Windows webcam that cold-start path
+                # produced a noticeable constant lip-sync offset, while both screen
+                # paths (which already had a short settle period) stayed synchronized.
+                # Give the camera/driver/FFmpeg path time to become active before the
+                # recorder establishes its A/V timeline. This is PRE-ROLL only: the
+                # timer still begins when record() actually starts.
+                self.status.setText("SYNCING CAMERA + MICROPHONE…")
+                QTimer.singleShot(500, self._begin_recording_now)
             else:
                 self.stop_btn.hide()
                 self._show_screen_control(screen)

@@ -1,6 +1,8 @@
-# v7.58.1 Daily Video Recorder
+# v7.58.2 Webcam A/V Sync
 
-Current Qt build: **v7.58.1 / `2026-08-18-b`**. The recorder introduced for SOS in v7.58.0 is now reused where it removes the most friction: **History → Calendar → Videos**.
+Current Qt build: **v7.58.2 / `2026-08-18-c`**. Windows testing isolated a noticeable A/V offset to **Webcam + Mic only**; Screen + Mic and Screen + Camera + Mic were already synchronized. The direct-camera path now uses source-native/optimal recorder cadence and a short 500 ms pre-roll before `record()` so the webcam/driver/FFmpeg path can settle before timestamps are established. The pre-roll is not part of the saved clip.
+
+The v7.58.1 daily recorder workflow remains: History → Calendar → Videos exposes **Record Video** plus **Add File**, and Settings → Protection keeps the SOS destination.
 
 For any selected calendar day the Videos tab now exposes:
 
@@ -140,7 +142,7 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-18-b / v7.58.1 Daily Video Recorder**
+Current Qt visual build: **2026-08-18-c / v7.58.2 Webcam A/V Sync**
 
 ## v7.57.1 protection/runtime bridge
 
