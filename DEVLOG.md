@@ -53,6 +53,33 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-09-16 -- v7.59.2 Quick Tasks + Protection Toggle
+Requested by: person asked for a second Activity Forge card dedicated to a rotating list of up to five small tasks that all share one configurable XP value and disappear when completed; also asked for a way to turn drift detection off because Brave/YouTube visual false positives were disruptive.
+
+Touched:
+- `shared/micro_tasks.py`: new rotating Quick Tasks domain. Stores up to five task labels in syncable `game_state`, uses one hidden repeatable `Quick Task` scoring Activity for the shared XP value, awards canonical immutable XP before removing a completed queue item, and supports removal without scoring.
+- `shared/db.py`: added `micro_tasks_v1` to the Sync V1 game-state whitelist so the small-task queue follows the linked profile across desktop/laptop.
+- `ui_qt/widgets.py`: added `MicroTaskCard`, styled as an Activity Forge card, with up to five clickable task rows, inline add/Enter, 5-task cap and a small × removal control.
+- `ui_qt/arena.py`: places Quick Tasks first in Activity Forge, filters the hidden system Activity out of normal cards/record-chase planning, gives completed Quick Tasks normal XP fly-up/audio/battle/level refresh behavior, and nudges Sync after queue edits/completions.
+- `ui_qt/pages.py`: Settings -> ACTIVITIES now owns one shared Quick Task XP control; hidden system Activity is excluded from normal Activity editing, Insights targets and Activity Records. Settings -> PROTECTION now has persistent PROTECTION ON/OFF.
+- `ui_qt/prefs.py`, `ui_qt/shell.py`, `ui_qt/protection_runtime.py`: added a per-device `protection_enabled` preference and immediate runtime start/stop. The Qt bridge now creates a fresh state/queue generation each time protection is enabled and invalidates old ScreenVision callbacks when disabled, preventing stale workers from causing late browser shutdowns.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.59.2 / `2026-09-16-b`.
+
+Did NOT touch: **no file under `core/` was modified.** The existing Rapid Screen Guard classifier/cadence, browser shutdown, blocker, recorder, XP/Level math, Character/3D, cloud RPC schema and updater semantics were not changed. `shared/game_engine.py` was not modified.
+
+What changed and why:
+Quick Tasks provide a lightweight scratchpad-scoring loop for small current actions without diluting the user's normal high-value Activity roster. The queue itself is synchronized as small last-write-wins profile state; its XP is still recorded through the same canonical event ledger as every other Activity so Ghost/records/Level remain coherent. Protection OFF is intentionally a device-local delivery setting: it pauses both WindowTracker drift handling and ScreenVision while WITNESS stays open, without weakening or rewriting Layer 1. Re-enable is restart-safe because each run uses fresh bridge state rather than flipping the old worker's shared stop flag back to false.
+
+Validation:
+- `micro_tasks` local database test: add two tasks, complete at +25 XP, change shared value to +40 XP, complete the second, verify 65 total canonical XP and an empty queue.
+- Sync serialization test confirms the hidden Quick Task Activity and `micro_tasks_v1` state are both collected for Sync V1.
+- Python compilation succeeds for the modified modules. Qt runtime smoke could not run in the Linux sandbox because PySide6 is not installed; the Windows/GitHub Actions build remains the UI/runtime acceptance test.
+
+Left for next session:
+Publish/tag `v7.59.2`, update both desktop and laptop to the same build before testing cross-device Quick Tasks, then confirm: add five small tasks, complete/remove rows, change Quick Task XP in Settings, and verify the queue + XP propagate after sync. Also toggle Protection OFF while Brave/YouTube is open and confirm no drift notices/visual red-line actions occur; toggle ON again and confirm the top badge returns to Rapid Screen Guard ACTIVE. If false positives still matter while protection is ON, treat classifier tuning as a separate explicit Layer-1 product decision rather than changing it casually.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json` or `sync_profile.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-09-16 -- v7.59.1 Activity Delete + Sync Patch
 Requested by: person reported that Activities/tasks could be added and edited but there was no way to delete one from the active roster.
 

@@ -11,6 +11,7 @@ import os
 PATH = "ui_settings.json"
 DEFAULTS = {
     "sound_feedback": True,
+    "protection_enabled": True,
 }
 
 

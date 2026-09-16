@@ -7,7 +7,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy,
+    QFrame, QHBoxLayout, QLabel, QLineEdit, QProgressBar, QPushButton, QSizePolicy,
     QVBoxLayout, QWidget,
 )
 
@@ -572,6 +572,115 @@ class ActivityCard(QFrame):
 
     def flash_success(self):
         """Briefly energize the card after a confirmed backend score event."""
+        self.setStyleSheet(
+            f"QFrame#ActivityCard {{background:#122019; border:1px solid {theme.GREEN}; "
+            "border-radius:12px;}}")
+        QTimer.singleShot(260, lambda: self.setStyleSheet(""))
+
+
+class MicroTaskCard(QFrame):
+    """Compact rotating queue for small one-off tasks inside Activity Forge."""
+
+    task_added = Signal(str)
+    task_completed = Signal(str)
+    task_removed = Signal(str)
+
+    def __init__(self, tasks=None, xp_value=25, parent=None):
+        super().__init__(parent)
+        self.setObjectName("ActivityCard")
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setMinimumWidth(210)
+        self.setMaximumHeight(270)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._tasks = []
+        self._xp_value = int(xp_value or 0)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 13, 14, 12)
+        lay.setSpacing(6)
+
+        self.title_lbl = QLabel("QUICK TASKS")
+        self.title_lbl.setStyleSheet("font-size: 13px; font-weight: 850;")
+        lay.addWidget(self.title_lbl)
+
+        self.xp_lbl = QLabel("")
+        self.xp_lbl.setStyleSheet(f"color: {theme.GREEN}; font-weight: 750;")
+        lay.addWidget(self.xp_lbl)
+
+        self.task_layout = QVBoxLayout()
+        self.task_layout.setSpacing(3)
+        lay.addLayout(self.task_layout)
+
+        self.empty_lbl = QLabel("No small tasks queued.")
+        self.empty_lbl.setObjectName("Muted")
+        lay.addWidget(self.empty_lbl)
+
+        add_row = QHBoxLayout()
+        add_row.setSpacing(5)
+        self.entry = QLineEdit()
+        self.entry.setPlaceholderText("Add a small task…")
+        self.entry.setMaxLength(180)
+        self.entry.returnPressed.connect(self._submit_add)
+        self.add_btn = QPushButton("+")
+        self.add_btn.setObjectName("Primary")
+        self.add_btn.setFixedWidth(38)
+        self.add_btn.clicked.connect(self._submit_add)
+        add_row.addWidget(self.entry, 1)
+        add_row.addWidget(self.add_btn)
+        lay.addLayout(add_row)
+
+        self.limit_lbl = QLabel("")
+        self.limit_lbl.setObjectName("Muted")
+        lay.addWidget(self.limit_lbl)
+        self.update_data(tasks or [], xp_value)
+
+    def _submit_add(self):
+        text = self.entry.text().strip()
+        if not text or len(self._tasks) >= 5:
+            return
+        self.task_added.emit(text)
+        self.entry.clear()
+
+    def update_data(self, tasks, xp_value):
+        self._tasks = [dict(x) for x in (tasks or [])][:5]
+        self._xp_value = max(0, int(xp_value or 0))
+        self.xp_lbl.setText(f"+{self._xp_value:,} XP EACH · {len(self._tasks)}/5 QUEUED")
+
+        clear_layout(self.task_layout)
+        for item in self._tasks:
+            task_id = str(item.get("id", ""))
+            text = str(item.get("text", "")).strip()
+            if not task_id or not text:
+                continue
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            done = QPushButton(f"○  {text}")
+            done.setToolTip(f"Complete task · +{self._xp_value:,} XP")
+            done.setStyleSheet(
+                f"QPushButton {{text-align:left; color:{theme.TEXT}; background:{theme.SURFACE_2}; "
+                f"border:1px solid {theme.BORDER}; border-radius:7px; padding:5px 7px;}}"
+                f"QPushButton:hover {{border-color:{theme.GREEN}; color:{theme.GREEN};}}")
+            done.clicked.connect(lambda _=False, tid=task_id: self.task_completed.emit(tid))
+            remove = QPushButton("×")
+            remove.setToolTip("Remove without scoring")
+            remove.setFlat(True)
+            remove.setFixedWidth(26)
+            remove.setStyleSheet(
+                f"QPushButton {{color:{theme.MUTED}; border:none; background:transparent; padding:2px;}}"
+                f"QPushButton:hover {{color:{theme.RED};}}")
+            remove.clicked.connect(lambda _=False, tid=task_id: self.task_removed.emit(tid))
+            row.addWidget(done, 1)
+            row.addWidget(remove)
+            self.task_layout.addLayout(row)
+
+        full = len(self._tasks) >= 5
+        self.empty_lbl.setVisible(not self._tasks)
+        self.entry.setEnabled(not full)
+        self.add_btn.setEnabled(not full)
+        self.entry.setPlaceholderText("Queue full — finish one first" if full else "Add a small task…")
+        self.limit_lbl.setText("Click a task to score it and remove it. × removes without XP.")
+
+    def flash_success(self):
         self.setStyleSheet(
             f"QFrame#ActivityCard {{background:#122019; border:1px solid {theme.GREEN}; "
             "border-radius:12px;}}")

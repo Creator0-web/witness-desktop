@@ -13,10 +13,11 @@ from PySide6.QtWidgets import (
 
 import game_analytics
 import game_engine
+import micro_tasks
 
 from . import audio, theme
 from .widgets import (
-    ActivityCard, AnimatedNumberLabel, Badge, BattleBar, RankAvatar, SmoothProgressBar,
+    ActivityCard, MicroTaskCard, AnimatedNumberLabel, Badge, BattleBar, RankAvatar, SmoothProgressBar,
     Sparkline, card,
 )
 
@@ -34,6 +35,7 @@ class ArenaPage(QScrollArea):
         self._activity_widgets = []
         self._activity_by_id = {}
         self._activity_signature = None
+        self._micro_task_widget = None
         self._battle_state = None
         self._banner = None
 
@@ -291,6 +293,7 @@ class ArenaPage(QScrollArea):
                 widget.deleteLater()
         self._activity_widgets = []
         self._activity_by_id = {}
+        self._micro_task_widget = None
 
     def _activity_anchor(self, aid):
         widget = self._activity_by_id.get(int(aid))
@@ -450,6 +453,61 @@ class ArenaPage(QScrollArea):
         card_widget = self._activity_by_id.get(int(aid))
         if card_widget is not None:
             card_widget.flash_success()
+        self.changed.emit()
+        QTimer.singleShot(0, lambda b=before: self._finish_action_refresh(b))
+
+    def _micro_anchor(self):
+        widget = self._micro_task_widget
+        if widget is not None:
+            try:
+                return widget.mapTo(self.viewport(), widget.rect().center())
+            except Exception:
+                pass
+        return QPoint(max(40, self.viewport().width() // 2), 360)
+
+    def _refresh_micro_card(self):
+        if self._micro_task_widget is None:
+            return
+        try:
+            self._micro_task_widget.update_data(micro_tasks.tasks(), micro_tasks.xp_value())
+        except Exception:
+            pass
+
+    def _add_micro_task(self, text):
+        try:
+            micro_tasks.add_task(text)
+        except Exception as ex:
+            self._show_banner("QUICK TASK NOT ADDED", theme.RED, "danger", str(ex))
+            return
+        self._refresh_micro_card()
+        self.changed.emit()
+
+    def _remove_micro_task(self, task_id):
+        try:
+            micro_tasks.remove_task(task_id)
+        except Exception as ex:
+            self._show_banner("QUICK TASK ERROR", theme.RED, "danger", str(ex))
+            return
+        self._refresh_micro_card()
+        self.changed.emit()
+
+    def _complete_micro_task(self, task_id):
+        before = self._snap
+        anchor = self._micro_anchor()
+        try:
+            event, _task = micro_tasks.complete_task(task_id)
+        except Exception as ex:
+            self._show_banner("QUICK TASK ERROR", theme.RED, "danger", str(ex))
+            return
+        self._refresh_micro_card()
+        if event:
+            score_xp = int(event.get("score_xp", 0) or 0)
+            self._show_xp_flyup(score_xp, anchor)
+            self.battle_bar.impact(theme.GREEN if score_xp >= 0 else theme.RED)
+            if score_xp > 0:
+                audio.play("xp")
+        if self._micro_task_widget is not None:
+            self._micro_task_widget.flash_success()
         self.changed.emit()
         QTimer.singleShot(0, lambda b=before: self._finish_action_refresh(b))
 
@@ -632,12 +690,18 @@ class ArenaPage(QScrollArea):
 
         self.activity_xp_lbl.setText(f"TODAY {rec['current_daily']:,} XP")
         record_map = {r["activity_id"]: r for r in rec.get("activity_records", [])}
-        acts = snap.get("activities", [])
+        all_acts = snap.get("activities", [])
+        acts = [a for a in all_acts if not micro_tasks.is_system_activity(a)]
         signature = tuple(
             (int(a["id"]), str(a.get("name", "")), int(a.get("xp_value", 0) or 0),
              str(a.get("kind", "repeatable"))) for a in acts)
         if signature != self._activity_signature:
             self._clear_activities()
+            self._micro_task_widget = MicroTaskCard(micro_tasks.tasks(), micro_tasks.xp_value())
+            self._micro_task_widget.task_added.connect(self._add_micro_task)
+            self._micro_task_widget.task_completed.connect(self._complete_micro_task)
+            self._micro_task_widget.task_removed.connect(self._remove_micro_task)
+            self._activity_widgets.append(self._micro_task_widget)
             for a in acts:
                 w = ActivityCard(a, record_map.get(a["id"]))
                 w.action.connect(self._act)
@@ -647,6 +711,7 @@ class ArenaPage(QScrollArea):
             self._activity_signature = signature
             self._reflow_activities()
         else:
+            self._refresh_micro_card()
             for a in acts:
                 w = self._activity_by_id.get(int(a["id"]))
                 if w is not None:

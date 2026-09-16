@@ -17,11 +17,12 @@ import db
 import demo_data
 import game_analytics
 import game_engine
+import micro_tasks
 import video_memories
 import profile_runtime
 import sync_engine
 
-from . import audio, onboarding, theme
+from . import audio, onboarding, prefs, theme
 from .protection_runtime import open_sos_folder, sos_videos
 from .widgets import card, clear_layout
 from .progression import ProgressionView
@@ -583,7 +584,8 @@ class RecordsPage(SimplePage):
 
         self.card_l.addWidget(QLabel("ACTIVITY RECORDS"))
         acts = _table(["ACTIVITY", "BEST UNITS", "XP", "DATE"])
-        rows = hof.get("activity_records", [])
+        system_activity_id = micro_tasks.system_activity_id()
+        rows = [x for x in hof.get("activity_records", []) if x.get("activity_id") != system_activity_id]
         acts.setRowCount(len(rows)); acts.setMaximumHeight(300)
         for r,x in enumerate(rows):
             _set_item(acts,r,0,x['name'])
@@ -602,7 +604,8 @@ class InsightsPage(SimplePage):
         self.target = QComboBox()
         self.target.addItem("Total Score")
         for a in game_engine.list_activities(True):
-            self.target.addItem(a["name"])
+            if not micro_tasks.is_system_activity(a):
+                self.target.addItem(a["name"])
         self.target.currentIndexChanged.connect(self.refresh)
         top.addWidget(self.target); top.addStretch(1)
         self.layout_.addLayout(top)
@@ -632,6 +635,7 @@ class SettingsPage(SimplePage):
     preview_protection = Signal()
     test_redline = Signal()
     record_sos = Signal()
+    protection_toggled = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__("Settings", parent,
@@ -732,12 +736,15 @@ class SettingsPage(SimplePage):
         )
         prd.setWordWrap(True); prd.setObjectName("Secondary")
         self.protection_status_label = QLabel(""); self.protection_status_label.setObjectName("Muted")
+        self.protection_toggle_btn = QPushButton("")
+        self.protection_toggle_btn.setCheckable(True)
+        self.protection_toggle_btn.clicked.connect(self.toggle_protection)
         prrow = QHBoxLayout()
         record_sos = QPushButton("● Record SOS Video"); record_sos.setObjectName("Primary"); record_sos.clicked.connect(self.record_sos.emit)
         open_sos = QPushButton("Open SOS Video Folder"); open_sos.clicked.connect(self.open_sos_videos)
         preview = QPushButton("Preview Intervention"); preview.clicked.connect(self.preview_protection.emit)
-        test_kill = QPushButton("Test Browser Shutdown"); test_kill.setObjectName("Danger"); test_kill.clicked.connect(self.test_redline.emit)
-        prrow.addWidget(record_sos); prrow.addWidget(open_sos); prrow.addWidget(preview); prrow.addWidget(test_kill); prrow.addStretch(1)
+        self.test_kill_btn = QPushButton("Test Browser Shutdown"); self.test_kill_btn.setObjectName("Danger"); self.test_kill_btn.clicked.connect(self.test_redline.emit)
+        prrow.addWidget(self.protection_toggle_btn); prrow.addWidget(record_sos); prrow.addWidget(open_sos); prrow.addWidget(preview); prrow.addWidget(self.test_kill_btn); prrow.addStretch(1)
         prl.addWidget(prh); prl.addWidget(prd); prl.addWidget(self.protection_status_label); prl.addLayout(prrow)
         self.layout_.addWidget(protection)
 
@@ -766,6 +773,14 @@ class SettingsPage(SimplePage):
 
         acts = card(); al=QVBoxLayout(acts)
         ah=QLabel("ACTIVITIES"); ah.setObjectName("SectionTitle"); al.addWidget(ah)
+        quick_desc = QLabel("Quick Tasks are the rotating 5-item list on Arena. Every Quick Task uses the same XP value and disappears when completed.")
+        quick_desc.setObjectName("Secondary"); quick_desc.setWordWrap(True); al.addWidget(quick_desc)
+        quick_row = QHBoxLayout()
+        quick_label = QLabel("QUICK TASK XP"); quick_label.setObjectName("Eyebrow")
+        self.quick_task_xp = QSpinBox(); self.quick_task_xp.setRange(0, 10000); self.quick_task_xp.setSuffix(" XP")
+        quick_save = QPushButton("Save Quick Task XP"); quick_save.clicked.connect(self.save_quick_task_xp)
+        quick_row.addWidget(quick_label); quick_row.addWidget(self.quick_task_xp); quick_row.addWidget(quick_save); quick_row.addStretch(1)
+        al.addLayout(quick_row)
         self.activities = QVBoxLayout(); al.addLayout(self.activities)
         add=QPushButton("+ Add Activity"); add.clicked.connect(self.add_activity); al.addWidget(add)
         self.layout_.addWidget(acts); self.layout_.addStretch(1); self.refresh()
@@ -795,6 +810,12 @@ class SettingsPage(SimplePage):
         self.sound_btn.setText("SOUND FEEDBACK · ON" if audio.enabled() else "SOUND FEEDBACK · OFF")
         self.sound_btn.setObjectName("Primary" if audio.enabled() else "")
         self.sound_btn.style().unpolish(self.sound_btn); self.sound_btn.style().polish(self.sound_btn)
+        protection_enabled = bool(prefs.get("protection_enabled", True))
+        self.set_protection_enabled(protection_enabled)
+        try:
+            self.quick_task_xp.setValue(micro_tasks.xp_value())
+        except Exception:
+            self.quick_task_xp.setValue(micro_tasks.DEFAULT_XP)
         try:
             vids = len(sos_videos())
             if not self.protection_status_label.text():
@@ -805,6 +826,8 @@ class SettingsPage(SimplePage):
                 self.protection_status_label.setText("Protection + rapid screen scanning run while WITNESS is open.")
         clear_layout(self.activities)
         for a in game_engine.list_activities(True):
+            if micro_tasks.is_system_activity(a):
+                continue
             row=QFrame(); row.setObjectName("MetricTile")
             lay=QHBoxLayout(row); lay.setContentsMargins(11,7,11,7)
             name=QLabel(a['name']); name.setStyleSheet("font-weight:750;")
@@ -966,6 +989,9 @@ class SettingsPage(SimplePage):
             QMessageBox.warning(self, "Cloud Setup SQL", f"Could not load the packaged setup SQL: {ex}")
 
     def set_protection_diagnostics(self, info: dict) -> None:
+        if not bool(prefs.get("protection_enabled", True)):
+            self.protection_status_label.setText("PROTECTION OFF · drift tracking and Screen Guard are paused on this device.")
+            return
         if not info.get("screen_guard"):
             self.protection_status_label.setText(
                 "TITLE ONLY · Screen Guard is not running. Check the Anthropic integration before relying on visual detection.")
@@ -987,6 +1013,35 @@ class SettingsPage(SimplePage):
         else:
             self.protection_status_label.setText(
                 f"RAPID SCREEN GUARD · {status} · waiting for a supported browser to be foreground")
+
+    def set_protection_enabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        self.protection_toggle_btn.blockSignals(True)
+        self.protection_toggle_btn.setChecked(enabled)
+        self.protection_toggle_btn.blockSignals(False)
+        self.protection_toggle_btn.setText("PROTECTION · ON" if enabled else "PROTECTION · OFF")
+        self.protection_toggle_btn.setObjectName("Primary" if enabled else "Danger")
+        self.protection_toggle_btn.style().unpolish(self.protection_toggle_btn)
+        self.protection_toggle_btn.style().polish(self.protection_toggle_btn)
+        self.test_kill_btn.setEnabled(enabled)
+        if not enabled:
+            self.protection_status_label.setText("PROTECTION OFF · drift tracking and Screen Guard are paused on this device.")
+
+    def toggle_protection(self, checked=False):
+        self.protection_toggled.emit(bool(checked))
+
+    def save_quick_task_xp(self):
+        try:
+            micro_tasks.set_xp_value(self.quick_task_xp.value())
+            if self._sync_service is not None:
+                try:
+                    self._sync_service.sync_now(manual=False)
+                except Exception:
+                    pass
+        except Exception as ex:
+            QMessageBox.critical(self, "Quick Task XP", str(ex))
+            return
+        self.refresh()
 
     def open_sos_videos(self):
         try:

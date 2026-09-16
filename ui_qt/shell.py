@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from . import onboarding, theme
+from . import onboarding, prefs, theme
 from .arena import ArenaPage
 from .character_page import CharacterPage
 from .pages import CalendarPage, InsightsPage, RecordsPage, SettingsPage
@@ -91,6 +91,7 @@ class WitnessMainWindow(QMainWindow):
         self.pages["settings"].preview_protection.connect(self._preview_protection)
         self.pages["settings"].test_redline.connect(self._test_redline_response)
         self.pages["settings"].record_sos.connect(self._record_sos_video)
+        self.pages["settings"].protection_toggled.connect(self._set_protection_enabled)
 
         # Local-first cross-device sync. Networking/merge work runs on a worker
         # thread; the app remains fully usable when the cloud is unavailable.
@@ -142,8 +143,12 @@ class WitnessMainWindow(QMainWindow):
         self.protection.redline_actions.connect(self._on_redline_actions)
         self.protection.diagnostics_changed.connect(self._on_protection_diagnostics)
         self.drift_notice = DriftNotice(self)
-        if start_protection:
+        protection_enabled = bool(prefs.get("protection_enabled", True))
+        self.pages["settings"].set_protection_enabled(protection_enabled)
+        if start_protection and protection_enabled:
             QTimer.singleShot(550, self.protection.start)
+        elif start_protection:
+            self._on_protection_status("PROTECTION · OFF", False)
         else:
             self._on_protection_status("PROTECTION · SMOKE TEST", False)
 
@@ -181,6 +186,27 @@ class WitnessMainWindow(QMainWindow):
         # Refresh only the visible surface; hidden pages remain lazy for speed.
         QTimer.singleShot(0, self._sync_theme)
         QTimer.singleShot(20, self.refresh_current)
+
+    def _set_protection_enabled(self, enabled):
+        enabled = bool(enabled)
+        prefs.set_value("protection_enabled", enabled)
+        try:
+            self.pages["settings"].set_protection_enabled(enabled)
+        except Exception:
+            pass
+        if enabled:
+            self._on_protection_status("PROTECTION · STARTING", False)
+            QTimer.singleShot(0, self.protection.start)
+        else:
+            self.drift_notice.hide()
+            if self._protection_dialog is not None and self._protection_dialog.isVisible():
+                self._protection_dialog.close()
+            self.protection.stop()
+            self._on_protection_status("PROTECTION · OFF", False)
+            try:
+                self.pages["settings"].set_protection_diagnostics({"running": False, "screen_guard": False, "status": "OFF"})
+            except Exception:
+                pass
 
     def _on_protection_status(self, text, active):
         self.protection_badge.setText(("◆ " if active else "◇ ") + str(text))

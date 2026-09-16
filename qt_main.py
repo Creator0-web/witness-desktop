@@ -1,4 +1,4 @@
-"""WITNESS PySide6 desktop shell — v7.59.1 Activity Delete + Sync Patch.
+"""WITNESS PySide6 desktop shell — v7.59.2 Quick Tasks + Protection Toggle.
 
 This is a deliberate parallel frontend during the migration away from Tkinter.
 It reads/writes the exact same canonical SQLite/game_engine backend established in v7.43.

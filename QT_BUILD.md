@@ -142,8 +142,13 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-09-16-a / v7.59.1 Activity Delete + Sync Patch**
+Current Qt visual build: **2026-09-16-b / v7.59.2 Quick Tasks + Protection Toggle**
 
+## v7.59.2 Quick Tasks + Protection Toggle
+
+Arena -> Activity Forge now begins with a dedicated **Quick Tasks** card. It holds up to five named one-off tasks, supports inline add/Enter, awards one shared configurable XP amount when a row is clicked, removes the completed task immediately, and provides × for removal without XP. Settings -> ACTIVITIES owns the shared Quick Task XP value. Internally, the rotating queue is stored in syncable `game_state` while XP is awarded through one hidden repeatable `Quick Task` scoring Activity, so Ghost/Level/daily score and Sync V1 keep using the canonical immutable XP ledger. The hidden system Activity is filtered out of normal Arena cards, Settings Activity management, Insights targets and Activity Records.
+
+Settings -> PROTECTION now includes a persistent **PROTECTION · ON/OFF** control. OFF stops the Qt protection bridge and pauses both title drift tracking and Rapid Screen Guard on that device. No `core/` file changed. `ProtectionRuntime` uses fresh state/queue generations on every enable cycle and invalidates callbacks on disable so an old ScreenVision worker cannot fire a late red-line action after the guard has been turned off.
 
 ## v7.59.1 Activity Delete + Sync Patch
 

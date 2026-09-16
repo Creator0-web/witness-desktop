@@ -180,6 +180,14 @@ one-screen preview into the character/emotional-reward phase:
   phone detection, legacy AI voice/chat and PatternWatcher remain retired. `trail.record_incident()`
   is still called on a confirmed red-line. The runtime bridge may call `core/`; it must not rewrite Layer 1.
 
+### Quick Tasks contract (v7.59.2+)
+
+Quick Tasks are a **small rotating queue**, not normal user-defined Activities. `shared/micro_tasks.py` owns at most five queued items in syncable `game_state` key `micro_tasks_v1`. All queued tasks share one Settings-controlled XP value. Completing a queue item must award XP through the canonical immutable ledger using one hidden repeatable scoring Activity named `Quick Task`, then remove that queue item only after the score event succeeds. The hidden system Activity is an implementation detail and should not appear as a normal Arena card, editable Settings Activity, Insights target or Activity Record. Queue edits are last-write-wins state in Sync V1; canonical XP events remain additive/merge-safe.
+
+### Protection enable/disable contract (v7.59.2+)
+
+The user may pause/resume drift protection from Settings. This is a **Qt delivery-layer switch** stored in local `ui_settings.json`; it is intentionally per-device and is not synchronized. OFF must stop polling and invalidate any pending ScreenVision callback before it can trigger a red-line action. Re-enabling must use a fresh state/queue generation so daemon workers from the prior run cannot be revived by resetting a shared stop flag. This control must be implemented in `ui_qt/protection_runtime.py` / `ui_qt/shell.py`; **do not change `core/tracker.py`, `core/vision.py`, `core/nuclear.py`, or any other Layer-1 file merely to implement the switch.**
+
 ### Activity removal contract (v7.59.1+)
 
 Deleting an Activity from Settings is a **roster deactivation**, not destructive history deletion. `game_engine.deactivate_activity()` / `db.deactivate_scoring_activity()` set `active=0` and update the Activity timestamp; immutable historical XP events keep their original Activity name/ID so Calendar, records, Ghost and Level history are never rewritten. Sync V1 already carries the Activity `active` field, so a deletion propagates to linked devices as a normal Activity update. UI should call this canonical path rather than deleting rows directly from SQLite.
@@ -192,7 +200,7 @@ Sync V1 scope is deliberately small and canonical:
 - Activity definitions (including edits/deactivation),
 - immutable XP events including explicit reversal/Undo rows,
 - daily notes,
-- player name/mission, Character environment selection, and Core Reserve clock.
+- player name/mission, Character environment selection, Core Reserve clock, and the `micro_tasks_v1` Quick Tasks queue.
 
 Local SQLite AUTOINCREMENT IDs are never sent as cross-device identity. `shared/db.py` maintains `sync_entity_map` UUID mappings beside the canonical tables. XP payloads reference `activity_sync_id` / `reverses_sync_id`, so another device can reconstruct its own local integer foreign keys safely. Remote XP merges trigger exact level-state reconciliation from the merged ledger; Ghost, records, Level and Character form remain derived locally and are never trusted as independent cloud counters. Synthetic-demo XP is not synchronized.
 

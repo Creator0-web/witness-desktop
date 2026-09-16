@@ -101,7 +101,26 @@ class ProtectionRuntime(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.state = {
+        self.state = self._fresh_state()
+        self.events: queue.Queue = queue.Queue()
+        self.tracker = None
+        self.screen_vision = None
+        self._running = False
+        self._redline_busy = False
+        self._generation = 0
+        self.poll = QTimer(self)
+        self.poll.setInterval(250)
+        self.poll.timeout.connect(self._drain)
+        self.lock_poll = QTimer(self)
+        self.lock_poll.setInterval(60_000)
+        self.lock_poll.timeout.connect(self._refresh_lock)
+        self.diag_poll = QTimer(self)
+        self.diag_poll.setInterval(2_000)
+        self.diag_poll.timeout.connect(self._emit_diagnostics)
+
+    @staticmethod
+    def _fresh_state() -> dict:
+        return {
             "present": True,
             "camera_ok": None,
             "stop": False,
@@ -112,20 +131,6 @@ class ProtectionRuntime(QObject):
             "idle_seconds": 0,
             "input_active": True,
         }
-        self.events: queue.Queue = queue.Queue()
-        self.tracker = None
-        self.screen_vision = None
-        self._running = False
-        self._redline_busy = False
-        self.poll = QTimer(self)
-        self.poll.setInterval(250)
-        self.poll.timeout.connect(self._drain)
-        self.lock_poll = QTimer(self)
-        self.lock_poll.setInterval(60_000)
-        self.lock_poll.timeout.connect(self._refresh_lock)
-        self.diag_poll = QTimer(self)
-        self.diag_poll.setInterval(2_000)
-        self.diag_poll.timeout.connect(self._emit_diagnostics)
 
     @property
     def running(self) -> bool:
@@ -141,7 +146,14 @@ class ProtectionRuntime(QObject):
             self.status_changed.emit("PROTECTION · RUNTIME MISSING", False)
             return
         try:
-            self.state["stop"] = False
+            # Every enable cycle receives a fresh state/queue generation. Old
+            # worker threads keep their old state with stop=True, so turning
+            # protection back on cannot accidentally revive a previous guard.
+            self._generation += 1
+            generation = self._generation
+            self.state = self._fresh_state()
+            self.events = queue.Queue()
+            self._running = True
             self.tracker = WindowTracker(self.state, self.events)
             self.tracker.start()
 
@@ -150,11 +162,13 @@ class ProtectionRuntime(QObject):
             # incident history and vision prompt. Qt only supplies the callback.
             vision_ready = False
             if ScreenVision is not None and os.environ.get("ANTHROPIC_API_KEY"):
-                self.screen_vision = ScreenVision(self.state, self._vision_redline)
+                self.screen_vision = ScreenVision(
+                    self.state,
+                    lambda proc, title, g=generation: self._vision_redline(g, proc, title),
+                )
                 self.screen_vision.start()
                 vision_ready = True
 
-            self._running = True
             self.poll.start()
             self.lock_poll.start()
             self.diag_poll.start()
@@ -166,15 +180,23 @@ class ProtectionRuntime(QObject):
                 True,
             )
         except Exception as ex:
+            self.state["stop"] = True
+            self._running = False
             self.status_changed.emit("PROTECTION · ERROR", False)
             self.redline_actions.emit({"error": str(ex)})
 
     def stop(self) -> None:
+        # Invalidate callbacks immediately, then let the daemon workers notice
+        # stop=True and exit on their own. This is deliberately implemented in
+        # the Qt bridge rather than changing frozen Layer-1 core code.
+        self._generation += 1
         self.state["stop"] = True
         self.poll.stop()
         self.lock_poll.stop()
         self.diag_poll.stop()
         self._running = False
+        self.tracker = None
+        self.screen_vision = None
 
 
     def _emit_diagnostics(self) -> None:
@@ -231,10 +253,12 @@ class ProtectionRuntime(QObject):
         elif check_kind in ("drift", "offtask", "routine"):
             self.drift_checkin.emit(proc, title)
 
-    def _vision_redline(self, proc: str, title: str) -> None:
+    def _vision_redline(self, generation: int, proc: str, title: str) -> None:
         # Called from frozen ScreenVision's worker thread after its original
-        # two-consecutive-FLAG confirmation. Keep the same whitelist that the
-        # legacy Tk nuclear_response() applied before browser termination.
+        # two-consecutive-FLAG confirmation. Ignore a late callback from any
+        # guard generation that has since been disabled/restarted.
+        if not self._running or int(generation) != int(self._generation):
+            return
         self._request_redline(str(proc), str(title))
 
     def _request_redline(self, proc: str, title: str) -> None:

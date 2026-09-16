@@ -647,6 +647,7 @@ def game_state_get(key, default=None):
 SYNCABLE_GAME_STATE_KEYS = {
     "player_name_v1", "player_mission_v1", "character_environment_v1",
     "character_core_started_ts_v1", "character_core_reset_count_v1",
+    "micro_tasks_v1",
 }
 
 
