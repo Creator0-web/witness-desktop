@@ -142,7 +142,19 @@ unchanged.
 
 # WITNESS Qt build
 
-Current Qt visual build: **2026-08-18-c / v7.58.2 Webcam A/V Sync**
+Current Qt visual build: **2026-09-16-a / v7.59.1 Activity Delete + Sync Patch**
+
+
+## v7.59.1 Activity Delete + Sync Patch
+
+Settings -> ACTIVITIES now exposes the existing safe deactivation path with a confirmed **Delete** button on every active Activity. Deleting removes the Activity from the live roster without rewriting historical XP/events. Sync V1 already serializes `active` + `updated_ts`, so the deletion propagates to linked devices as an Activity update. Core protection, scoring math, recorder and cloud RPC behavior are unchanged.
+
+## v7.59.0 WITNESS Sync V1
+
+The Qt shell now has an optional local-first sync service (`shared/sync_engine.py` + `ui_qt/sync_service.py`). Network/merge work stays off the GUI thread. Each device keeps its own SQLite profile and can score while offline. When configured, the first device creates a hosted profile and exports one private Link Code; another device links by pasting that code. Activities, immutable XP/reversal events, daily notes and a small whitelist of Character/identity state synchronize; Level/Ghost/records are re-derived locally from the merged ledger. Daily/SOS video bytes and Layer-1 telemetry remain local in V1.
+
+The reference backend is `cloud/supabase_witness_sync.sql`. It exposes only narrow RPC functions and expects a Supabase publishable key plus a high-entropy WITNESS profile secret; no service-role key belongs in the desktop executable. `sync_profile.json` is treated like a credential: it stays in the local data folder, is excluded from backup/export/release source, and Factory Reset removes it from that device.
+
 
 ## v7.57.1 protection/runtime bridge
 

@@ -21,6 +21,12 @@ search_paths = [
 ]
 
 datas = [(str(root / "release_channel.json"), ".")]
+sync_sql = root / "cloud" / "supabase_witness_sync.sql"
+if sync_sql.exists():
+    datas.append((str(sync_sql), "cloud"))
+sync_guide = root / "SYNC_SETUP.md"
+if sync_guide.exists():
+    datas.append((str(sync_guide), "."))
 sound_dir = root / "ui_qt" / "assets" / "sounds"
 if sound_dir.exists():
     for wav in sound_dir.glob("*.wav"):

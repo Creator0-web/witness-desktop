@@ -15,6 +15,7 @@ from .character_page import CharacterPage
 from .pages import CalendarPage, InsightsPage, RecordsPage, SettingsPage
 from .protection_runtime import DriftNotice, ProtectionDialog, ProtectionRuntime
 from .sos_recorder import SOSRecorderDialog
+from .sync_service import SyncService
 from .update_service import UpdateService
 from app_version import BUILD_TAG, DISPLAY_VERSION
 import update_manager
@@ -65,6 +66,9 @@ class WitnessMainWindow(QMainWindow):
         th.addWidget(self.updated_badge)
         if self.updated_badge.isVisible():
             QTimer.singleShot(12000, lambda: self.updated_badge.setVisible(False))
+        self.sync_badge = QLabel("◇ SYNC · LOCAL")
+        self.sync_badge.setObjectName("SyncBadge")
+        th.addWidget(self.sync_badge)
         self.protection_badge = QLabel("◇ PROTECTION · STARTING")
         self.protection_badge.setObjectName("ProtectionBadge")
         th.addWidget(self.protection_badge)
@@ -87,6 +91,13 @@ class WitnessMainWindow(QMainWindow):
         self.pages["settings"].preview_protection.connect(self._preview_protection)
         self.pages["settings"].test_redline.connect(self._test_redline_response)
         self.pages["settings"].record_sos.connect(self._record_sos_video)
+
+        # Local-first cross-device sync. Networking/merge work runs on a worker
+        # thread; the app remains fully usable when the cloud is unavailable.
+        self.sync_service = SyncService(self)
+        self.sync_service.status_changed.connect(self._on_sync_status)
+        self.sync_service.data_changed.connect(self._on_sync_data_changed)
+        self.pages["settings"].set_sync_service(self.sync_service)
 
         nav = QWidget()
         nav.setObjectName("BottomNav")
@@ -145,6 +156,31 @@ class WitnessMainWindow(QMainWindow):
         if profile_state.get("factory_reset_applied"):
             QTimer.singleShot(1250, self._show_factory_reset_notice)
 
+
+    def _on_sync_status(self, info):
+        linked = bool((info or {}).get("linked"))
+        busy = bool((info or {}).get("busy"))
+        err = str((info or {}).get("last_error", "") or "")
+        if not linked:
+            text = "◇ SYNC · LOCAL"
+        elif busy:
+            text = "△ SYNCING"
+        elif err:
+            text = "◇ SYNC · OFFLINE"
+        elif float((info or {}).get("last_sync_at", 0) or 0) > 0:
+            text = "△ SYNCED"
+        else:
+            text = "△ SYNC · LINKED"
+        self.sync_badge.setText(text)
+        self.sync_badge.setProperty("active", bool(linked and not err))
+        self.sync_badge.style().unpolish(self.sync_badge)
+        self.sync_badge.style().polish(self.sync_badge)
+
+    def _on_sync_data_changed(self, _result):
+        # Remote XP/Activity changes can alter today, Ghost, records and Level.
+        # Refresh only the visible surface; hidden pages remain lazy for speed.
+        QTimer.singleShot(0, self._sync_theme)
+        QTimer.singleShot(20, self.refresh_current)
 
     def _on_protection_status(self, text, active):
         self.protection_badge.setText(("◆ " if active else "◇ ") + str(text))
@@ -255,6 +291,8 @@ class WitnessMainWindow(QMainWindow):
         if event.type() == QEvent.Type.WindowActivate and hasattr(self, "update_service"):
             if time.monotonic() - getattr(self, "_last_update_check", 0.0) >= 60.0:
                 QTimer.singleShot(250, self._check_for_updates)
+            if hasattr(self, "sync_service"):
+                QTimer.singleShot(450, lambda: self.sync_service.sync_now(manual=False))
         return super().event(event)
 
     def _show_onboarding(self):
@@ -354,6 +392,8 @@ class WitnessMainWindow(QMainWindow):
         # Each page already refreshes itself when it is opened. Theme sync is
         # lightweight and may react immediately if an action caused evolution.
         QTimer.singleShot(0, self._sync_theme)
+        if hasattr(self, "sync_service"):
+            QTimer.singleShot(900, lambda: self.sync_service.sync_now(manual=False))
         return
 
 

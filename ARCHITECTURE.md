@@ -180,6 +180,28 @@ one-screen preview into the character/emotional-reward phase:
   phone detection, legacy AI voice/chat and PatternWatcher remain retired. `trail.record_incident()`
   is still called on a confirmed red-line. The runtime bridge may call `core/`; it must not rewrite Layer 1.
 
+### Activity removal contract (v7.59.1+)
+
+Deleting an Activity from Settings is a **roster deactivation**, not destructive history deletion. `game_engine.deactivate_activity()` / `db.deactivate_scoring_activity()` set `active=0` and update the Activity timestamp; immutable historical XP events keep their original Activity name/ID so Calendar, records, Ghost and Level history are never rewritten. Sync V1 already carries the Activity `active` field, so a deletion propagates to linked devices as a normal Activity update. UI should call this canonical path rather than deleting rows directly from SQLite.
+
+### Cross-device sync contract (v7.59+)
+
+`shared/sync_engine.py` is an **optional synchronization layer over the existing local profile**, not a replacement database and not a second scoring engine. Every device continues to own a normal `%LOCALAPPDATA%\WITNESS\witness.db` and must remain fully usable offline. The current provider is `SupabaseProvider`, using the narrow Postgres RPC contract in `cloud/supabase_witness_sync.sql`; provider-specific networking is intentionally isolated so a later self-hosted WITNESS server can implement/replace this boundary without touching Arena, `game_engine.py`, or Layer 1.
+
+Sync V1 scope is deliberately small and canonical:
+- Activity definitions (including edits/deactivation),
+- immutable XP events including explicit reversal/Undo rows,
+- daily notes,
+- player name/mission, Character environment selection, and Core Reserve clock.
+
+Local SQLite AUTOINCREMENT IDs are never sent as cross-device identity. `shared/db.py` maintains `sync_entity_map` UUID mappings beside the canonical tables. XP payloads reference `activity_sync_id` / `reverses_sync_id`, so another device can reconstruct its own local integer foreign keys safely. Remote XP merges trigger exact level-state reconciliation from the merged ledger; Ghost, records, Level and Character form remain derived locally and are never trusted as independent cloud counters. Synthetic-demo XP is not synchronized.
+
+The hosted schema stores generic profile-scoped JSON items in a private schema and exposes only create/link/push/pull RPCs. The desktop app uses only a Supabase **publishable** key plus a random high-entropy WITNESS profile secret; the backend stores only the SHA-256 hash of that WITNESS secret. Never embed a Supabase secret/service-role key in WITNESS. The private local credential lives in `sync_profile.json`; release validation/cleanup and profile backup/export must exclude it just like `secrets.json`.
+
+The Link Code is a copy/paste recovery credential containing provider connection information plus the WITNESS profile secret. Treat it like a password. Linking an existing cloud profile is a **replace-local-scoring-domain** operation after a safety backup, not a blind merge of two unrelated local runs. Daily/SOS video files, raw computer/Screen Guard telemetry, integration secrets and backups remain device-local in V1. Factory Reset removes the local sync credential so stale cloud history cannot silently repopulate a fresh run; V1 does not delete the remote cloud profile.
+
+Qt integration lives in `ui_qt/sync_service.py`: 15-second periodic sync, startup sync, app-reactivation sync and post-Arena-action nudges run off the GUI thread. Network failure must never block scoring or protection; it only changes the sync badge to offline/retrying and later passes reconcile automatically.
+
 ### Local profile / data isolation (v7.51+)
 
 `profile_runtime.py` is imported by **both** `main.py` and `qt_main.py` before
@@ -193,7 +215,7 @@ files live outside the application/program folder. **Do not "fix" those paths ba
 to the source directory.** The cwd switch is what isolates even frozen `core/`
 without modifying Layer 1.
 
-V1 has no WITNESS username/password. The Windows account is the local privacy
+The local profile still requires no username/password. When optional v7.59 Sync is disabled, the Windows account is the privacy
 boundary: two different Windows users naturally receive different `%LOCALAPPDATA%`
 profiles and different SQLite databases. Two people sharing the same Windows login
 would share one WITNESS profile; true multi-profile/login support is deferred.
@@ -227,8 +249,9 @@ uncaught Python tracebacks locally. None of these folders belong in release sour
 marker. `activate()` applies that marker before `db.init()` can open SQLite. The reset removes scoring,
 progression, character/game state, telemetry/history, notes/demo/local delivery prefs and derived
 insight history. It deliberately preserves `profile.json`, `secrets.json`, `sos_videos/`, `Backups/`
-and any active `block_lock.txt`. This is a progress/history reset, not deletion of the person's rescue
-media, integrations or rollback path. Never implement factory reset by deleting an open database.
+and any active `block_lock.txt`. If `sync_profile.json` exists, it is removed on this device so the
+old cloud ledger cannot immediately rehydrate the reset run. This is a progress/history reset, not
+deletion of the person's rescue media, integrations or rollback path; V1 does not delete the cloud profile. Never implement factory reset by deleting an open database.
 
 
 ### Interactive 3D control feel (v7.56.1+)

@@ -53,6 +53,57 @@ Left for next session: [anything incomplete or flagged for later]
 
 ## Entries
 
+## 2026-09-16 -- v7.59.1 Activity Delete + Sync Patch
+Requested by: person reported that Activities/tasks could be added and edited but there was no way to delete one from the active roster.
+
+Touched:
+- `ui_qt/pages.py`: each Settings -> Activities row now has an explicit red **Delete** button. Delete asks for confirmation, then uses the existing canonical `game_engine.deactivate_activity()` path. The confirmation explains that past XP/history is preserved. If WITNESS Sync is linked, a background sync is nudged immediately; the existing 15-second sync remains the fallback.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.59.1 / `2026-09-16-a`.
+
+Did NOT touch: **no file under `core/` was modified.** Rapid Screen Guard/browser shutdown remains frozen. `shared/game_engine.py`, `shared/db.py`, Sync provider/RPC code, recorder, Character/3D, XP/Level math and Factory Reset were not changed.
+
+What changed and why:
+Activity deletion already existed correctly in the backend as deactivation, but the modern Settings UI exposed only Add/Edit. v7.59.1 exposes that existing capability. Deactivation is deliberately non-destructive: the Activity disappears from the live roster while historical XP events remain immutable. Because Sync V1 serializes the Activity `active` field and `updated_ts`, the removal propagates to other linked devices without deleting their historical XP.
+
+Validation:
+- Python compile/AST checks pass after the patch.
+- Local database test confirms a deactivated Activity disappears from `list_activities(True)` while its historical XP event and day score remain intact.
+- Sync serialization test confirms deactivation produces `active=false` with a newer Activity signature so linked devices receive the roster removal.
+
+Left for next session:
+Publish/tag `v7.59.1`. On Windows, delete a disposable Activity in Settings and confirm it immediately disappears from Settings and Arena after returning there; if Sync is configured, confirm it also disappears on the second device after sync while old History/XP remains unchanged.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json` or `sync_profile.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
+## 2026-08-19 -- v7.59.0 WITNESS Sync V1
+Requested by: person will move back and forth regularly between a desktop and laptop and asked for the original automatic cross-device plan now, without depending on their old physical server, while keeping the design replaceable by that server later.
+
+Touched:
+- `shared/sync_engine.py`: added an optional local-first cross-device sync engine. Each device keeps its own normal SQLite profile and remains usable offline. V1 uses a narrow Supabase REST/RPC provider, creates a high-entropy WITNESS profile secret, supports Create Profile / one-time-style Link Code / Link Existing Device / push / pull, and isolates provider networking so a future self-hosted provider can replace it without changing game logic.
+- `shared/db.py`: added sidecar stable UUID mappings/runtime sync metadata and narrow sync read/apply helpers. Canonical SQLite integer IDs remain local; cloud XP rows reference stable Activity/Undo UUIDs. Remote XP merge triggers exact Level reconciliation from the immutable ledger. Synthetic demo XP is excluded.
+- `ui_qt/sync_service.py`: added non-blocking worker-thread sync orchestration with startup, ~15-second periodic, reactivation, manual, create/link and unlink flows. Network failure never blocks scoring or protection.
+- `ui_qt/shell.py`, `ui_qt/theme.py`, `ui_qt/pages.py`: added a compact top-bar SYNC state and Settings -> WITNESS SYNC UI for Project URL, publishable key, Create Sync Profile, Link Existing Profile, Sync Now, Copy Link Code, Unlink This Device and Copy Cloud Setup SQL. Linking makes a safety backup and replaces only the local sync/scoring domain before pulling the cloud profile.
+- `cloud/supabase_witness_sync.sql`, `SYNC_SETUP.md`: added the hosted V1 backend schema/RPC contract and one-time setup guide. Private tables store only profile-scoped JSON records and a SHA-256 hash of the WITNESS profile secret; desktop clients never receive a service-role/secret key.
+- `profile_runtime.py`: excludes `sync_profile.json` from backups/exports and Factory Reset removes the local sync credential so a fresh run cannot immediately rehydrate stale cloud XP. The cloud profile itself is not deleted.
+- `packaging/witness.spec`, `packaging/validate_source_tree.py`, `packaging/clean_repository.ps1`, `.gitignore`: package the SQL/setup guide and treat `sync_profile.json` as forbidden private runtime state.
+- `app_version.py`, `qt_main.py`, `README.md`, `QT_BUILD.md`, `DISTRIBUTION.md`, `ARCHITECTURE.md`, `NEXT_CHAT_PROMPT.md`: advanced/documented v7.59.0 / `2026-08-19-a`.
+
+Did NOT touch: **no file under `core/` was modified.** Rapid Screen Guard/browser shutdown remains exactly at the Windows-approved v7.57.2+ behavior. `shared/game_engine.py` was not modified. Recorder/camera A/V sync, Character/3D, scoring values and updater semantics were not changed.
+
+What changed and why:
+WITNESS now has one optional identity that can follow the person between desktop and laptop without copying `witness.db`. The cloud carries canonical small records (Activities, immutable XP/reversal events, daily notes and selected profile/Character/Core state), while each PC remains the authoritative local runtime and derives Ghost/records/Level/Character from the merged ledger. Actual daily/SOS video files, raw Screen Guard/computer telemetry, integration secrets and backups stay local in V1. The Link Code contains the provider connection information plus the private WITNESS profile secret; it is a recovery credential and must be treated like a password.
+
+Validation:
+- Recursive Python compile/AST checks pass after the final source changes.
+- Local serialization/apply test reconstructed Activities, a +XP event and its Undo reversal, note and profile state into a clean second database with correct foreign-key remapping and zero net score.
+- An in-memory fake-provider end-to-end test simulated two devices: Device A uploaded a booking, Device B linked/downloaded it and uploaded a second booking, then Device A pulled and reached 2,000 XP. Link Code encode/decode also round-tripped.
+- The hosted Supabase SQL/RPC and real Windows multi-device network path cannot be fully proven inside the Linux sandbox. GitHub Actions/Windows plus one real Supabase project are the acceptance test.
+
+Left for next session:
+Publish/tag v7.59.0, run the packaged SQL once in a Supabase project, then on desktop create the Sync Profile and copy its Link Code. Install/update the laptop to the same release, Link Existing Profile with that code, then verify a real +1,000 Booked Job and an Undo propagate in both directions. Do not add cloud media yet; daily/SOS files intentionally remain local. If the person later wants to use their physical server, add a new provider behind `shared/sync_engine.py` rather than rewriting the scoring/UI.
+
+Handoff rule for future AI sessions: read ARCHITECTURE.md and this entire DEVLOG before editing; never read/open/share `secrets.json` or `sync_profile.json`; keep `core/` frozen unless the person explicitly authorizes Layer 1; add a NEW DEVLOG entry at the top (never edit/delete old entries) and update NEXT_CHAT_PROMPT.md after meaningful work. Tell the person directly that both handoff files were updated before ending the session.
+
 ## 2026-08-18 -- v7.58.2 Webcam A/V Sync
 Requested by: person tested all three v7.58.1 daily-recorder modes and isolated the problem: **Screen + Camera + Mic is good, Screen + Mic is good, but Webcam + Mic has noticeable audio-behind-video lip sync.**
 

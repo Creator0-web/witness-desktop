@@ -2,6 +2,7 @@
 import sqlite3
 import threading
 import time
+import uuid
 from datetime import datetime, date, timedelta
 
 import config
@@ -114,6 +115,26 @@ def init():
                 ON level_events(day, ts);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_level_events_transition_dedupe
                 ON level_events(day, event_type, from_level, to_level, source);
+
+            -- WITNESS Sync V1 local metadata. Canonical scoring tables remain
+            -- unchanged; stable cross-device IDs live beside them so remote
+            -- merges never depend on SQLite AUTOINCREMENT IDs.
+            CREATE TABLE IF NOT EXISTS sync_entity_map (
+                entity_type TEXT NOT NULL,
+                local_id TEXT NOT NULL,
+                sync_id TEXT NOT NULL,
+                last_uploaded_sig TEXT,
+                PRIMARY KEY(entity_type, local_id),
+                UNIQUE(entity_type, sync_id)
+            );
+            CREATE TABLE IF NOT EXISTS sync_game_state_meta (
+                key TEXT PRIMARY KEY,
+                updated_ts REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sync_runtime (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
         # Additive migration -- safe to run every startup. SQLite has
@@ -623,13 +644,60 @@ def game_state_get(key, default=None):
     return row[0] if row else default
 
 
+SYNCABLE_GAME_STATE_KEYS = {
+    "player_name_v1", "player_mission_v1", "character_environment_v1",
+    "character_core_started_ts_v1", "character_core_reset_count_v1",
+}
+
+
 def game_state_set(key, value):
+    key = str(key)
+    now = time.time()
     with _lock:
         _conn.execute(
             "INSERT INTO game_state(key,value) VALUES (?,?) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (str(key), str(value)))
+            (key, str(value)))
+        if key in SYNCABLE_GAME_STATE_KEYS:
+            _conn.execute(
+                "INSERT INTO sync_game_state_meta(key,updated_ts) VALUES (?,?) "
+                "ON CONFLICT(key) DO UPDATE SET updated_ts=excluded.updated_ts",
+                (key, now))
         _conn.commit()
+
+
+def game_state_set_remote(key, value, updated_ts):
+    """Apply a remote syncable state value without inventing a new local time."""
+    key = str(key)
+    if key not in SYNCABLE_GAME_STATE_KEYS:
+        return False
+    with _lock:
+        row = _conn.execute(
+            "SELECT updated_ts FROM sync_game_state_meta WHERE key=?", (key,)).fetchone()
+        local_ts = float(row[0]) if row else 0.0
+        incoming = float(updated_ts or 0.0)
+        if local_ts > incoming:
+            return False
+        _conn.execute(
+            "INSERT INTO game_state(key,value) VALUES (?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, str(value)))
+        _conn.execute(
+            "INSERT INTO sync_game_state_meta(key,updated_ts) VALUES (?,?) "
+            "ON CONFLICT(key) DO UPDATE SET updated_ts=excluded.updated_ts",
+            (key, incoming))
+        _conn.commit()
+    return True
+
+
+def syncable_game_state_rows():
+    with _lock:
+        rows = _conn.execute(
+            "SELECT s.key,s.value,COALESCE(m.updated_ts,0) "
+            "FROM game_state s LEFT JOIN sync_game_state_meta m ON m.key=s.key "
+            "WHERE s.key IN (%s)" % ",".join("?" for _ in SYNCABLE_GAME_STATE_KEYS),
+            tuple(sorted(SYNCABLE_GAME_STATE_KEYS))).fetchall()
+    return [{"key": k, "value": v, "updated_ts": float(ts or 0)} for k, v, ts in rows]
 
 
 def game_state_delete(key):
@@ -671,6 +739,204 @@ def delete_level_events_by_source(source):
         _conn.commit()
         return int(cur.rowcount or 0)
 
+
+
+# ── Cross-device sync metadata helpers ──────────────────────────────────
+
+def sync_map_get_by_local(entity_type, local_id):
+    with _lock:
+        row = _conn.execute(
+            "SELECT sync_id,last_uploaded_sig FROM sync_entity_map "
+            "WHERE entity_type=? AND local_id=?",
+            (str(entity_type), str(local_id))).fetchone()
+    return {"sync_id": row[0], "last_uploaded_sig": row[1]} if row else None
+
+
+def sync_map_get_by_sync(entity_type, sync_id):
+    with _lock:
+        row = _conn.execute(
+            "SELECT local_id,last_uploaded_sig FROM sync_entity_map "
+            "WHERE entity_type=? AND sync_id=?",
+            (str(entity_type), str(sync_id))).fetchone()
+    return {"local_id": row[0], "last_uploaded_sig": row[1]} if row else None
+
+
+def sync_map_ensure(entity_type, local_id):
+    entity_type = str(entity_type); local_id = str(local_id)
+    with _lock:
+        row = _conn.execute(
+            "SELECT sync_id,last_uploaded_sig FROM sync_entity_map "
+            "WHERE entity_type=? AND local_id=?", (entity_type, local_id)).fetchone()
+        if row:
+            return {"sync_id": row[0], "last_uploaded_sig": row[1]}
+        sync_id = str(uuid.uuid4())
+        _conn.execute(
+            "INSERT INTO sync_entity_map(entity_type,local_id,sync_id,last_uploaded_sig) "
+            "VALUES (?,?,?,NULL)", (entity_type, local_id, sync_id))
+        _conn.commit()
+    return {"sync_id": sync_id, "last_uploaded_sig": None}
+
+
+def sync_map_bind(entity_type, local_id, sync_id, last_uploaded_sig=None):
+    with _lock:
+        _conn.execute(
+            "INSERT INTO sync_entity_map(entity_type,local_id,sync_id,last_uploaded_sig) "
+            "VALUES (?,?,?,?) ON CONFLICT(entity_type,local_id) DO UPDATE SET "
+            "sync_id=excluded.sync_id,last_uploaded_sig=COALESCE(excluded.last_uploaded_sig,sync_entity_map.last_uploaded_sig)",
+            (str(entity_type), str(local_id), str(sync_id), last_uploaded_sig))
+        _conn.commit()
+
+
+def sync_map_mark_uploaded(entity_type, local_id, signature):
+    with _lock:
+        _conn.execute(
+            "UPDATE sync_entity_map SET last_uploaded_sig=? WHERE entity_type=? AND local_id=?",
+            (str(signature), str(entity_type), str(local_id)))
+        _conn.commit()
+
+
+def sync_activity_rows():
+    with _lock:
+        rows = _conn.execute(
+            "SELECT id,name,xp_value,kind,active,sort_order,created_ts,updated_ts "
+            "FROM scoring_activities ORDER BY id").fetchall()
+    keys = ("id","name","xp_value","kind","active","sort_order","created_ts","updated_ts")
+    out = []
+    for row in rows:
+        d = dict(zip(keys, row)); d["active"] = bool(d["active"]); out.append(d)
+    return out
+
+
+def sync_xp_rows():
+    with _lock:
+        rows = _conn.execute(
+            "SELECT id,ts,day,activity_id,activity_name,event_type,quantity,base_xp,score_xp,level_xp," 
+            "level_multiplier,reverses_event_id,source,metadata FROM xp_events "
+            "WHERE source!='synthetic_demo' ORDER BY id").fetchall()
+    keys = ("id","ts","day","activity_id","activity_name","event_type","quantity","base_xp","score_xp",
+            "level_xp","level_multiplier","reverses_event_id","source","metadata")
+    return [dict(zip(keys, row)) for row in rows]
+
+
+def sync_note_rows():
+    with _lock:
+        rows = _conn.execute("SELECT rowid,ts,day,text FROM notes ORDER BY rowid").fetchall()
+    return [{"id": r[0], "ts": r[1], "day": r[2], "text": r[3]} for r in rows]
+
+
+def sync_upsert_activity(sync_id, payload):
+    """Upsert a cloud Activity and return the local integer activity id."""
+    mapped = sync_map_get_by_sync("activity", sync_id)
+    incoming_updated = float(payload.get("updated_ts", 0) or 0)
+    with _lock:
+        if mapped:
+            local_id = int(mapped["local_id"])
+            row = _conn.execute("SELECT updated_ts FROM scoring_activities WHERE id=?", (local_id,)).fetchone()
+            if row and float(row[0] or 0) > incoming_updated:
+                return local_id
+            _conn.execute(
+                "UPDATE scoring_activities SET name=?,xp_value=?,kind=?,active=?,sort_order=?,created_ts=?,updated_ts=? WHERE id=?",
+                (str(payload.get("name", "Activity")), int(payload.get("xp_value", 0) or 0),
+                 str(payload.get("kind", "repeatable")), int(bool(payload.get("active", True))),
+                 int(payload.get("sort_order", 0) or 0), float(payload.get("created_ts", incoming_updated) or incoming_updated),
+                 incoming_updated, local_id))
+        else:
+            cur = _conn.execute(
+                "INSERT INTO scoring_activities(name,xp_value,kind,active,sort_order,created_ts,updated_ts) VALUES (?,?,?,?,?,?,?)",
+                (str(payload.get("name", "Activity")), int(payload.get("xp_value", 0) or 0),
+                 str(payload.get("kind", "repeatable")), int(bool(payload.get("active", True))),
+                 int(payload.get("sort_order", 0) or 0), float(payload.get("created_ts", incoming_updated) or incoming_updated),
+                 incoming_updated))
+            local_id = int(cur.lastrowid)
+            _conn.execute(
+                "INSERT INTO sync_entity_map(entity_type,local_id,sync_id,last_uploaded_sig) VALUES ('activity',?,?,NULL)",
+                (str(local_id), str(sync_id)))
+        _conn.commit()
+    return local_id
+
+
+def sync_insert_xp_event(sync_id, payload):
+    mapped = sync_map_get_by_sync("xp_event", sync_id)
+    if mapped:
+        return int(mapped["local_id"]), False
+    activity_id = None
+    activity_sync_id = payload.get("activity_sync_id")
+    if activity_sync_id:
+        am = sync_map_get_by_sync("activity", activity_sync_id)
+        if am:
+            activity_id = int(am["local_id"])
+    reverses_event_id = None
+    reverses_sync_id = payload.get("reverses_sync_id")
+    if reverses_sync_id:
+        rm = sync_map_get_by_sync("xp_event", reverses_sync_id)
+        if rm:
+            reverses_event_id = int(rm["local_id"])
+        else:
+            return None, False  # caller retries reversal after positive events are present
+    with _lock:
+        cur = _conn.execute(
+            "INSERT INTO xp_events(ts,day,activity_id,activity_name,event_type,quantity,base_xp,score_xp,level_xp," 
+            "level_multiplier,reverses_event_id,source,metadata) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (float(payload.get("ts", time.time())), str(payload.get("day", "")), activity_id,
+             str(payload.get("activity_name", "Activity")), str(payload.get("event_type", "activity")),
+             float(payload.get("quantity", 1) or 0), int(payload.get("base_xp", 0) or 0),
+             int(payload.get("score_xp", 0) or 0), int(payload.get("level_xp", 0) or 0),
+             float(payload.get("level_multiplier", 1.0) or 1.0), reverses_event_id,
+             str(payload.get("source", "sync")), payload.get("metadata")))
+        local_id = int(cur.lastrowid)
+        _conn.execute(
+            "INSERT INTO sync_entity_map(entity_type,local_id,sync_id,last_uploaded_sig) VALUES ('xp_event',?,?,NULL)",
+            (str(local_id), str(sync_id)))
+        _conn.commit()
+    return local_id, True
+
+
+def sync_insert_note(sync_id, payload):
+    mapped = sync_map_get_by_sync("note", sync_id)
+    if mapped:
+        return int(mapped["local_id"]), False
+    with _lock:
+        cur = _conn.execute("INSERT INTO notes(ts,day,text) VALUES (?,?,?)",
+                            (float(payload.get("ts", time.time())), str(payload.get("day", "")), str(payload.get("text", ""))))
+        local_id = int(cur.lastrowid)
+        _conn.execute(
+            "INSERT INTO sync_entity_map(entity_type,local_id,sync_id,last_uploaded_sig) VALUES ('note',?,?,NULL)",
+            (str(local_id), str(sync_id)))
+        _conn.commit()
+    return local_id, True
+
+
+def sync_clear_profile_domain():
+    """Clear only data that WITNESS Sync V1 owns before linking a new device."""
+    sync_state_keys = tuple(sorted(SYNCABLE_GAME_STATE_KEYS))
+    with _lock:
+        _conn.execute("DELETE FROM xp_events")
+        _conn.execute("DELETE FROM level_events")
+        _conn.execute("DELETE FROM scoring_activities")
+        _conn.execute("DELETE FROM notes")
+        _conn.execute("DELETE FROM sync_entity_map")
+        _conn.execute("DELETE FROM sync_game_state_meta")
+        _conn.execute("DELETE FROM sync_runtime")
+        if sync_state_keys:
+            marks = ",".join("?" for _ in sync_state_keys)
+            _conn.execute(f"DELETE FROM game_state WHERE key IN ({marks})", sync_state_keys)
+        for key in ("rolling_level_v1", "character_peak_rating_v1", "character_peak_reconcile_v1"):
+            _conn.execute("DELETE FROM game_state WHERE key=?", (key,))
+        _conn.commit()
+
+
+def sync_runtime_get(key, default=None):
+    with _lock:
+        row = _conn.execute("SELECT value FROM sync_runtime WHERE key=?", (str(key),)).fetchone()
+    return row[0] if row else default
+
+
+def sync_runtime_set(key, value):
+    with _lock:
+        _conn.execute(
+            "INSERT INTO sync_runtime(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (str(key), str(value)))
+        _conn.commit()
 
 def close():
     """Close the SQLite connection. Mostly useful for isolated tests/tools."""

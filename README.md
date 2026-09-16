@@ -1,5 +1,8 @@
 # WITNESS v2 — AI accountability coach
 
+> **v7.59.1 Activity Delete + Sync Patch:** optional local-first cross-device sync now lets one WITNESS run follow the user between desktop and laptop. The first computer creates a hosted sync profile; other computers paste one private **WITNESS Link Code**. Activities, immutable XP/Undo events, daily notes, player name/mission, Core clock and Character environment reconcile automatically about every 15 seconds and on app re-activation; Ghost, Levels, records and Character form are re-derived locally from the merged XP ledger. Each device still owns a normal local SQLite database and works offline. Daily/SOS video files, raw protection telemetry, API secrets and backups stay device-local in V1. The reference hosted provider is Supabase through narrow profile-secret-checked RPC functions; `shared/sync_engine.py` isolates that provider so a self-hosted backend can replace it later.
+>
+
 > **v7.58.2 Webcam A/V Sync:** Windows testing isolated a noticeable lip-sync offset to **Webcam + Mic only**; both screen-recording modes were already synchronized. Camera-only recording now lets Qt choose the source-native frame cadence and gives the webcam/driver/FFmpeg path a short 500 ms pre-roll before the recorder establishes its A/V timeline. Screen modes and Rapid Screen Guard are unchanged.
 >
 > **v7.58.1 Daily Video Recorder:** History → Calendar → Videos now has both **Record Video** and **Add File**.
@@ -106,6 +109,12 @@ PowerShell:  setx ANTHROPIC_API_KEY "sk-ant-your-key"
 Then reopen the app. Without it, WITNESS uses built-in lines and cannot
 rewrite schedules or chat. With it: everything personalizes to your goals.
 Typical cost: a few cents per day.
+
+## Cross-device WITNESS Sync (v7.59+)
+
+WITNESS Sync is optional. The app remains local-first and fully usable without it. To enable the current hosted provider, run the packaged `cloud/supabase_witness_sync.sql` once in a Supabase project, then use **Settings → WITNESS Sync** on the computer that already has the canonical history. The Project URL plus **Publishable** key create the cloud profile; WITNESS then generates a private Link Code that can be pasted into another computer. Never put a Supabase secret/service-role key in the desktop app. See `SYNC_SETUP.md`.
+
+Sync V1 intentionally does **not** upload daily/SOS videos or raw Screen Guard/computer telemetry. It synchronizes the small scoring/profile records needed to continue the same campaign across machines; derived Level/Ghost/records are recalculated from the merged ledger. The private sync credential is excluded from profile exports/backups and Factory Reset unlinks sync on that device so old cloud XP cannot silently repopulate a fresh local run.
 
 ## Local profile / personal data (v7.51+)
 WITNESS no longer stores personal history beside the program files. On Windows,

@@ -1,3 +1,7 @@
+# v7.59.1 Activity Delete + Sync Patch
+
+Installed builds now bundle `cloud/supabase_witness_sync.sql` and `SYNC_SETUP.md` as reference setup assets. The desktop executable contains only the user-supplied Supabase **publishable** key and a per-profile WITNESS secret stored in `%LOCALAPPDATA%\WITNESS\sync_profile.json`; never package or request a Supabase secret/service-role key. `sync_profile.json` is a runtime credential and is forbidden from release source, backups and profile exports. The sync layer is optional and does not change updater semantics or the per-user install boundary.
+
 # WITNESS Windows distribution / updating
 
 ## Target user experience

@@ -79,7 +79,7 @@ FACTORY_RESET_FILES = (
     "witness_data.json", "progression.json", "conversation.json",
     "xp_triggers.json", "xp_triggers_fired.json", "ui_settings.json",
     "vision_history.json", "trail_history.json", "stats_model.json",
-    "life_data.json",
+    "life_data.json", "sync_profile.json",
 )
 FACTORY_RESET_DIRS = (
     "recaps", "video_memories", "day_breakdown_data", "insight_data", "journals",
@@ -308,7 +308,7 @@ def _snapshot_database(source: Path, destination: Path) -> bool:
 
 def _iter_export_paths(root: Path, *, include_media: bool) -> list[Path]:
     excluded_names = {
-        "secrets.json", SESSION_FILE, PENDING_IMPORT_FILE,
+        "secrets.json", "sync_profile.json", SESSION_FILE, PENDING_IMPORT_FILE,
     }
     excluded_dirs = {BACKUP_DIR, CRASH_DIR, RESTORE_STAGING_DIR, ".backup_tmp", "Updates", "release-quarantine"}
     out: list[Path] = []
@@ -343,6 +343,7 @@ def _write_profile_archive(root: Path, destination: Path, *, reason: str,
         "reason": reason,
         "include_media": bool(include_media),
         "secrets_included": False,
+        "sync_credentials_included": False,
     }
     tmp_zip = destination.with_name(destination.name + ".tmp")
     try:
@@ -383,7 +384,7 @@ def _backup_files(root: Path) -> list[Path]:
 def create_backup(*, reason="manual", force=True, max_backups=BACKUP_KEEP) -> dict:
     """Create a compact rotating local backup of critical WITNESS state.
 
-    Backups intentionally exclude `secrets.json` and large media folders. Use
+    Backups intentionally exclude `secrets.json`, the private sync link credential, and large media folders. Use
     `export_profile()` for a user-requested full portable export.
     """
     root = data_dir().resolve()
@@ -562,7 +563,9 @@ def stage_factory_reset() -> dict:
     The open SQLite database is never deleted in-process. A forced backup is
     created first, then a marker is written. On the next activation the marker
     is applied before ``db.init()`` can open the database. API secrets, profile
-    identity, SOS videos and the Backups folder are intentionally preserved.
+    identity, SOS videos and the Backups folder are intentionally preserved. The
+    local cloud-sync credential is removed so stale cloud XP cannot silently
+    repopulate a freshly reset profile.
     """
     root = data_dir().resolve()
     backup = create_backup(reason="before-factory-reset", force=True)
@@ -571,6 +574,7 @@ def stage_factory_reset() -> dict:
         "mode": "reset_progress_history_on_next_launch",
         "backup_path": str(backup.get("path", "")),
         "preserves": ["profile.json", "secrets.json", "sos_videos/", "Backups/"],
+        "sync": "unlinked_on_this_device",
     }
     try:
         (root / PENDING_IMPORT_FILE).unlink(missing_ok=True)

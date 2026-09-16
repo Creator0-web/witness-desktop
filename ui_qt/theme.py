@@ -148,6 +148,8 @@ QLabel#EraBadge {{
     border:1px solid {t['border_strong']}; border-radius:{max(5, r-2)}px; padding:4px 8px;
 }}
 QLabel#LiveBadge {{ color:{GREEN}; font-weight:850; }}
+QLabel#SyncBadge {{ color:{MUTED}; font-size:10px; font-weight:800; padding:4px 8px; border:1px solid {t['border']}; border-radius:6px; }}
+QLabel#SyncBadge[active="true"] {{ color:{GREEN}; border-color:#2d7241; background:{GREEN_DARK}; }}
 QLabel#ProtectionBadge {{ color:{MUTED}; font-size:10px; font-weight:800; padding:4px 8px; border:1px solid {t['border']}; border-radius:6px; }}
 QLabel#ProtectionBadge[active="true"] {{ color:{GREEN}; border-color:#2d7241; background:{GREEN_DARK}; }}
 QLabel#UpdatedBadge {{

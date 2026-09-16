@@ -29,7 +29,7 @@ FORBIDDEN_DATA = {
     "import_history.json", ".pending_legacy_import.json", ".session_active.json",
     "progression.json", "conversation.json", "xp_triggers.json", "xp_triggers_fired.json",
     "ui_settings.json", "vision_history.json", "trail_history.json", "stats_model.json",
-    "life_data.json", "block_lock.txt",
+    "life_data.json", "block_lock.txt", "sync_profile.json",
 }
 FORBIDDEN_RUNTIME_DIRS = {
     "recaps", "sos_videos", "video_memories", "day_breakdown_data", "insight_data",

@@ -19,6 +19,7 @@ import game_analytics
 import game_engine
 import video_memories
 import profile_runtime
+import sync_engine
 
 from . import audio, onboarding, theme
 from .protection_runtime import open_sos_folder, sos_videos
@@ -658,6 +659,36 @@ class SettingsPage(SimplePage):
         pl.addWidget(self.profile_path_label); pl.addWidget(self.profile_pending_label); pl.addLayout(prow)
         self.layout_.addWidget(profile)
 
+        sync = card(); syl = QVBoxLayout(sync)
+        syh = QLabel("WITNESS SYNC"); syh.setObjectName("SectionTitle")
+        syd = QLabel(
+            "One WITNESS profile across your desktop and laptop. Each device stays local-first and works offline; "
+            "small scoring/history changes reconcile through the hosted sync provider when internet returns. "
+            "Daily/SOS video files and raw computer-protection telemetry stay on the device in Sync V1."
+        )
+        syd.setWordWrap(True); syd.setObjectName("Secondary")
+        self.sync_status_label = QLabel("LOCAL ONLY"); self.sync_status_label.setStyleSheet("font-weight:850;")
+        self.sync_detail_label = QLabel(""); self.sync_detail_label.setObjectName("Muted"); self.sync_detail_label.setWordWrap(True)
+        backend_form = QFormLayout()
+        self.sync_url_edit = QLineEdit(); self.sync_url_edit.setPlaceholderText("https://YOUR-PROJECT.supabase.co")
+        self.sync_key_edit = QLineEdit(); self.sync_key_edit.setPlaceholderText("sb_publishable_… (never use a secret/service-role key)")
+        backend_form.addRow("Project URL", self.sync_url_edit)
+        backend_form.addRow("Publishable key", self.sync_key_edit)
+        self.sync_create_btn = QPushButton("Create Sync Profile"); self.sync_create_btn.setObjectName("Primary"); self.sync_create_btn.clicked.connect(self.create_sync_profile)
+        self.sync_link_btn = QPushButton("Link Existing Profile"); self.sync_link_btn.clicked.connect(self.link_sync_profile)
+        self.sync_now_btn = QPushButton("Sync Now"); self.sync_now_btn.clicked.connect(self.sync_now)
+        self.sync_copy_btn = QPushButton("Copy Link Code"); self.sync_copy_btn.clicked.connect(self.copy_sync_link_code)
+        self.sync_unlink_btn = QPushButton("Unlink This Device"); self.sync_unlink_btn.setObjectName("Danger"); self.sync_unlink_btn.clicked.connect(self.unlink_sync)
+        self.sync_sql_btn = QPushButton("Copy Cloud Setup SQL"); self.sync_sql_btn.clicked.connect(self.copy_sync_setup_sql)
+        syrow = QHBoxLayout()
+        for button in (self.sync_create_btn, self.sync_link_btn, self.sync_now_btn, self.sync_copy_btn, self.sync_unlink_btn, self.sync_sql_btn):
+            syrow.addWidget(button)
+        syrow.addStretch(1)
+        syl.addWidget(syh); syl.addWidget(syd); syl.addWidget(self.sync_status_label); syl.addWidget(self.sync_detail_label)
+        syl.addLayout(backend_form); syl.addLayout(syrow)
+        self.layout_.addWidget(sync)
+        self._sync_service = None
+
         safety = card(); sl = QVBoxLayout(safety)
         sh = QLabel("DATA SAFETY"); sh.setObjectName("SectionTitle")
         sd = QLabel("WITNESS keeps rotating local backups of critical profile state. Full exports can also include your local media. API secrets are never included.")
@@ -715,7 +746,7 @@ class SettingsPage(SimplePage):
         dgd = QLabel(
             "Return WITNESS progress to a brand-new state: XP, Ghost history, Levels, records, Character/Core/Shield state, "
             "computer/drift history, notes and demo data reset to zero. Your installed app, integration secrets, SOS videos "
-            "and safety backups are preserved."
+            "and safety backups are preserved. If this device is linked to WITNESS Sync, Factory Reset also unlinks this device so old cloud XP cannot immediately return."
         )
         dgd.setWordWrap(True); dgd.setObjectName("Secondary")
         reset_btn = QPushButton("Factory Reset Progress"); reset_btn.setObjectName("Danger")
@@ -743,6 +774,7 @@ class SettingsPage(SimplePage):
         st=demo_data.status()
         self.status.setText(
             f"Synthetic demo: {'ON · '+str(st.get('days',0))+' days' if st.get('active') else 'OFF'}")
+        self._refresh_sync_controls()
         prof = profile_runtime.current_profile()
         pid = str(prof.get("profile_id", ""))
         self.profile_id_label.setText(f"PROFILE · {pid[:12] if pid else 'initializing'}")
@@ -780,7 +812,158 @@ class SettingsPage(SimplePage):
             meta=QLabel(f"{a['xp_value']} XP · {a['kind']}"); meta.setObjectName("Secondary")
             lay.addWidget(meta)
             edit=QPushButton("Edit"); edit.clicked.connect(lambda _=False, x=a: self.edit_activity(x))
-            lay.addWidget(edit); self.activities.addWidget(row)
+            delete=QPushButton("Delete"); delete.setObjectName("Danger")
+            delete.clicked.connect(lambda _=False, x=a: self.delete_activity(x))
+            lay.addWidget(edit); lay.addWidget(delete); self.activities.addWidget(row)
+
+    def set_sync_service(self, service):
+        self._sync_service = service
+        service.status_changed.connect(self._on_sync_status)
+        service.operation_finished.connect(self._on_sync_operation_finished)
+        service.error.connect(self._on_sync_error)
+        self._refresh_sync_controls()
+
+    def _refresh_sync_controls(self, status=None):
+        info = dict(status or sync_engine.public_status())
+        linked = bool(info.get("linked"))
+        busy = bool(info.get("busy", False))
+        self.sync_url_edit.setEnabled(not linked and not busy)
+        self.sync_key_edit.setEnabled(not linked and not busy)
+        self.sync_create_btn.setVisible(not linked); self.sync_link_btn.setVisible(not linked)
+        self.sync_create_btn.setEnabled(not busy); self.sync_link_btn.setEnabled(not busy)
+        self.sync_now_btn.setVisible(linked); self.sync_copy_btn.setVisible(linked); self.sync_unlink_btn.setVisible(linked)
+        self.sync_now_btn.setEnabled(linked and not busy); self.sync_copy_btn.setEnabled(linked and not busy); self.sync_unlink_btn.setEnabled(linked and not busy)
+        self.sync_sql_btn.setVisible(not linked); self.sync_sql_btn.setEnabled(not busy)
+        if linked:
+            pid = str(info.get("profile_id", ""))
+            device = str(info.get("device_name", "Windows PC"))
+            if busy:
+                self.sync_status_label.setText("△ SYNCING…")
+            elif info.get("last_error"):
+                self.sync_status_label.setText("◇ SYNC · OFFLINE / RETRYING")
+            elif float(info.get("last_sync_at", 0) or 0) > 0:
+                self.sync_status_label.setText("△ SYNCED")
+            else:
+                self.sync_status_label.setText("△ LINKED · FIRST SYNC PENDING")
+            last = float(info.get("last_sync_at", 0) or 0)
+            if last:
+                import time as _time
+                age = max(0, int(_time.time() - last))
+                when = f"{age}s ago" if age < 120 else f"{age//60}m ago"
+            else:
+                when = "not yet"
+            err = str(info.get("last_error", "") or "")
+            extra = f" · {err[:160]}" if err else ""
+            self.sync_detail_label.setText(
+                f"PROFILE {pid[:8].upper()} · {device} · last sync {when} · "
+                f"last pass ↑{int(info.get('last_push_count',0) or 0)} ↓{int(info.get('last_pull_count',0) or 0)}{extra}")
+        else:
+            self.sync_status_label.setText("LOCAL ONLY · NOT LINKED")
+            self.sync_detail_label.setText(
+                "First computer: run the supplied Supabase SQL once, paste the Project URL + Publishable key, then Create Sync Profile. "
+                "Other computers only need the private WITNESS Link Code copied from the first device.")
+
+    def _on_sync_status(self, info):
+        self._refresh_sync_controls(info)
+
+    def _on_sync_operation_finished(self, operation, result):
+        self._refresh_sync_controls()
+        if operation == "create":
+            QMessageBox.information(
+                self, "WITNESS Sync created",
+                "This computer is now the first device on the cloud profile and its current scoring history has been uploaded.\n\n"
+                "Click Copy Link Code and paste that code into WITNESS on your laptop.")
+        elif operation == "link":
+            QMessageBox.information(
+                self, "Device linked",
+                "This device is linked to the same WITNESS profile. Its local scoring domain was safely backed up first, then replaced with the cloud profile. "
+                "Future changes sync automatically while online.")
+        elif operation == "unlink":
+            QMessageBox.information(self, "Device unlinked", "Automatic cloud sync is off on this computer. Local WITNESS data remains here.")
+        elif operation in ("sync", "sync_manual"):
+            self.status.setText(
+                f"Sync complete · ↑{int(result.get('pushed',0) or 0)} ↓{int(result.get('pulled',0) or 0)}")
+        self.refresh()
+
+    def _on_sync_error(self, operation, message):
+        self._refresh_sync_controls()
+        if operation != "sync":
+            QMessageBox.warning(self, "WITNESS Sync", str(message))
+
+    def create_sync_profile(self):
+        if self._sync_service is None:
+            QMessageBox.warning(self, "WITNESS Sync", "Sync service is not ready yet."); return
+        url = self.sync_url_edit.text().strip(); key = self.sync_key_edit.text().strip()
+        if not url or not key:
+            QMessageBox.information(
+                self, "Cloud setup required",
+                "Run the WITNESS cloud SQL once in a Supabase project, then paste that project's URL and Publishable key here. "
+                "Use Copy Cloud Setup SQL to put the exact schema on your clipboard.")
+            return
+        answer = QMessageBox.question(
+            self, "Create WITNESS Sync profile?",
+            "This computer's current Activities, XP history and notes will become the starting cloud profile.\n\n"
+            "Only use a Supabase PUBLISHABLE key here — never a secret/service-role key. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            self._sync_service.create_profile(url, key)
+
+    def link_sync_profile(self):
+        if self._sync_service is None:
+            QMessageBox.warning(self, "WITNESS Sync", "Sync service is not ready yet."); return
+        code, ok = QInputDialog.getMultiLineText(
+            self, "Link this device",
+            "Paste the private WITNESS Link Code from your other computer:")
+        if not ok or not code.strip():
+            return
+        answer = QMessageBox.warning(
+            self, "Replace this device's scoring profile?",
+            "WITNESS will create a safety backup first, then replace THIS DEVICE'S Activities, XP ledger, Levels and daily notes with the linked cloud profile. "
+            "Local videos and protection telemetry are not deleted.\n\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        if answer == QMessageBox.StandardButton.Yes:
+            self._sync_service.link_profile(code.strip())
+
+    def sync_now(self):
+        if self._sync_service is not None:
+            self._sync_service.sync_now(manual=True)
+
+    def copy_sync_link_code(self):
+        try:
+            code = sync_engine.encode_link_code()
+            QApplication.clipboard().setText(code)
+            QMessageBox.information(
+                self, "Link Code copied",
+                "Paste this private Link Code into WITNESS on the other computer. Anyone with this code can link to this profile, so treat it like a password.")
+        except Exception as ex:
+            QMessageBox.warning(self, "WITNESS Sync", str(ex))
+
+    def unlink_sync(self):
+        if self._sync_service is None:
+            return
+        answer = QMessageBox.question(
+            self, "Unlink this device?",
+            "Cloud sync will stop on this computer. No local WITNESS data is deleted and the other linked device keeps working.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            self._sync_service.unlink_local()
+
+    def copy_sync_setup_sql(self):
+        import sys as _sys
+        resource_root = Path(getattr(_sys, "_MEIPASS", profile_runtime.app_dir() or Path.cwd()))
+        path = resource_root / "cloud" / "supabase_witness_sync.sql"
+        if not path.is_file():
+            path = Path(profile_runtime.app_dir() or Path.cwd()) / "cloud" / "supabase_witness_sync.sql"
+        try:
+            sql = path.read_text(encoding="utf-8")
+            QApplication.clipboard().setText(sql)
+            QMessageBox.information(
+                self, "Cloud Setup SQL copied",
+                "The complete WITNESS Sync schema is on your clipboard. Create/open a Supabase project → SQL Editor → paste → Run. "
+                "Then copy the Project URL and Publishable key into WITNESS.")
+        except Exception as ex:
+            QMessageBox.warning(self, "Cloud Setup SQL", f"Could not load the packaged setup SQL: {ex}")
 
     def set_protection_diagnostics(self, info: dict) -> None:
         if not info.get("screen_guard"):
@@ -816,7 +999,7 @@ class SettingsPage(SimplePage):
         answer = QMessageBox.warning(
             self, "Factory reset WITNESS progress?",
             "This resets ALL progress/history to zero on the next launch.\n\n"
-            "A safety backup will be created first. Integration secrets, SOS videos and existing backups are preserved.\n\n"
+            "A safety backup will be created first. Integration secrets, SOS videos and existing backups are preserved. If Sync is linked, this device is unlinked during reset so cloud history cannot silently repopulate the fresh run.\n\n"
             "This cannot be undone from the app except by restoring that backup.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel)
@@ -906,7 +1089,7 @@ class SettingsPage(SimplePage):
             return
         answer = QMessageBox.question(
             self, "Export profile?",
-            "This export includes your local WITNESS profile and media, but intentionally excludes API secrets. "
+            "This export includes your local WITNESS profile and media, but intentionally excludes API secrets and the private WITNESS Sync link credential. "
             "Large video history can make the ZIP take longer to create.\n\nContinue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if answer != QMessageBox.StandardButton.Yes:
@@ -970,6 +1153,30 @@ class SettingsPage(SimplePage):
 
     def add_activity(self): self._activity_dialog(None)
     def edit_activity(self, a): self._activity_dialog(a)
+
+    def delete_activity(self, a):
+        name = str((a or {}).get("name", "Activity"))
+        answer = QMessageBox.warning(
+            self, "Delete Activity?",
+            f"Remove '{name}' from your active Activities?\n\n"
+            "Past XP and History stay intact. This only removes the Activity from your current roster.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            game_engine.deactivate_activity(a["id"])
+            # The sync layer already carries Activity active/deactivated state,
+            # so linked devices will remove it on their next normal sync.
+            if self._sync_service is not None:
+                try:
+                    self._sync_service.sync_now(manual=False)
+                except Exception:
+                    pass
+        except Exception as ex:
+            QMessageBox.critical(self, "Activity error", str(ex))
+            return
+        self.refresh()
 
     def _activity_dialog(self, a):
         from PySide6.QtWidgets import QDialog, QDialogButtonBox
